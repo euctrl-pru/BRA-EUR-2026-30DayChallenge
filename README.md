@@ -19,3 +19,26 @@ And if you manage less than 30, that's fine, too! ❤️
 This year's prompt for the 30-Day-Chart-Challenge are as follows:
 
 ![30-Day-Challenge-Prompts](figures/prompts-30-day-chart-challenge.webp)
+
+
+## Progress
+
+### Day 1 - "part-to-whole"
+
+A late decision to participate - literally the night before - made it a bumpy start.
+With our Day 1 contribution we want to (combine and) show the scale difference in traffic volume and the associated share of flights between both regions.
+Focussing on "regional departures" (as a part of the whole traffic volume) how these shares stay constant or vary between Brazil and Europe.
+
+Conceptual building blocks
+
+* traffic volume ~ standard bar chart, i.e., geom_col() with respective scales to depict 'millions' of flights
+* left bottome := share (Brazil) & right bottom := share (Europe)
+* we used {patchwork} and its 'design' specification to combine the 3 building block plots
+* provided some explanatory text using title, subtitle, and caption
+
+![Day-01 contribution](figures/day01.png)
+
+### Day 2 - "pictogram"
+
+
+### Day 3 - "mosaic"
