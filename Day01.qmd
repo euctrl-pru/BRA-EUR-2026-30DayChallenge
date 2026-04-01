@@ -1,0 +1,96 @@
+---
+title: "Day 01 - part-to-whole"
+format: html
+---
+
+## Topic / Prompt
+
+part-to-whole
+
+## Ideas
+
+Classic presentation of a part-to-whole would be a grouped barchart.
+It would be good, if we can present the scale difference between BRA and EUR.
+
+* shares can be presented as sunburst (hierarchical donut) --> geom_arc or specific sunburst package (tbd)
+* bi-directional waffle --> separate for BRA and EUR, then "patched" with patchwork
+* mosaic
+
+
+This is Day 01 - we have no prep. Thus, annotations (e.g. logo) can come with the next submissions.    
+What would be cool is to have a background chart showing Brazil and Europe which we could add as background.
+
+
+
+## Trials
+
+```{r}
+#| message: false
+library(tidyverse)
+
+# play data
+df <- tibble(
+  region = rep(c("Europe", "Brazil"), each = 4),
+  group  = rep(c("Study 12", "Study 12", "Others", "Others"), 2),
+  dest   = rep(c("Partner", "Elsewhere", "Partner", "Elsewhere"), 2),
+  count  = c(1500, 50000, 200, 150000,  # Europe (Huge volume, small % to BR)
+             1200, 8000,  100, 15000)   # Brazil (Lower volume, higher % to EUR)
+)
+```
+
+
+## Sunburst
+
+```{r}
+library(ggforce)
+
+# Data prep for sunburst involves calculating cumulative shares
+df_sun <- df %>%
+  group_by(region) %>%
+  mutate(share = count / sum(count),
+         end = cumsum(share) * 2 * pi,
+         start = lag(end, default = 0))
+
+ggplot(df_sun) +
+  geom_arc_bar(aes(x0 = 0, y0 = 0, r0 = 0.6, r = 1, 
+                   start = start, end = end, fill = group)
+               , stat = "identity") +
+  geom_arc_bar(aes(x0 = 0, y0 = 0, r0 = 1, r = 1.4, 
+                   start = start, end = end, fill = dest)
+               , stat = "identity") +
+  facet_wrap(~region) +
+  coord_fixed() +
+  theme_void()
+```
+
+
+## Waffle
+
+```{r}
+# install.packages("devtools")
+# devtools::install_github("liamgilbey/ggwaffle")
+library(ggwaffle)
+
+
+# Scaled for 1 square = 500 flights
+df_waffle <- df %>% 
+  mutate(scaled_count = ceiling(count / 500)) 
+
+# Europe Waffle
+p1 <- ggplot(filter(df_waffle, region == "Europe"), 
+             aes(fill = interaction(group, dest), values = scaled_count)) +
+  geom_waffle(color = "white", size = .25, n_rows = 20) +
+  scale_fill_brewer(palette = "Set3") +
+  coord_equal() + theme_void()
+
+# Brazil Waffle
+p2 <- ggplot(filter(df_waffle, region == "Brazil"), 
+             aes(fill = interaction(group, dest), values = scaled_count)) +
+  geom_waffle(color = "white", size = .25, n_rows = 20) +
+  scale_fill_brewer(palette = "Set3") +
+  coord_equal() + theme_void()
+
+library(patchwork)
+p1 + p2 # Shows the massive scale difference visually
+```
+
