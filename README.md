@@ -32,7 +32,7 @@ Focussing on "regional departures" (as a part of the whole traffic volume) how t
 Conceptual building blocks
 
 * traffic volume ~ standard bar chart, i.e., geom_col() with respective scales to depict 'millions' of flights
-* left bottome := share (Brazil) & right bottom := share (Europe)
+* left bottom := share (Brazil) & right bottom := share (Europe)
 * we used {patchwork} and its 'design' specification to combine the 3 building block plots
 * provided some explanatory text using title, subtitle, and caption
 
@@ -40,5 +40,18 @@ Conceptual building blocks
 
 ### Day 2 - "pictogram"
 
+The pictogram graph uses fontaweseom to plot the aeroplane icon.
+We present the share of punctuality for both regions.
+
+Conceptual building blocks
+
+* traffic data from study data
+* the underlying chart is a waffle plot, i.e., x-y cells for which we need to build an index of "postions"
+* geom_text() uses the icon as label, i.e., we "print" the icon multiple times
+* rotating the icon is done per angle 180deg
+* labs are placed and wrapped with ggtext::textbox_simple() and the associated parameters.
+* extensive use of theme to place title, subtitle, strip bands, and payload.
+
+![Day-02 contribution](figures/day02.png)
 
 ### Day 3 - "mosaic"
