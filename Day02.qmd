@@ -1,0 +1,333 @@
+---
+title: "Day 02 - pictorgram"
+format: html
+---
+
+## Prompt / Topic
+
+pictogram
+
+## Kick-off Example
+
+```{r}
+# helper function 
+create_data <- function(region, on_time, slight, extreme) {
+  data.frame(
+    region = region,
+    category = c(
+      rep("On time", on_time),
+      rep("Slight", slight),
+      rep("Extreme", extreme)
+    )
+  )
+}
+# Dados baseados no relatório
+brazil <- create_data("Brazil", 62, 26, 12)
+europe <- create_data("Europe", 48, 27, 25)
+
+df <- bind_rows(brazil, europe)
+
+df <- df |>
+  group_by(region) |>
+  mutate(
+    id = row_number(),
+    x = (id - 1) %% 10,
+    y = 10 - ((id - 1) %/% 10)
+  )
+
+colors <- c(
+  "On time" = "#00FF66",
+  "Slight" = "#FFD700",
+  "Extreme" = "#FF3B30"
+)
+
+ggplot(df, aes(x = x, y = y, label = "✈️", color = category)) +
+  geom_text(size = 10) +
+  scale_color_manual(values = colors) +
+  facet_wrap(~region) +
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill = "#2b2b2b", color = NA),
+    plot.background = element_rect(fill = "#2b2b2b", color = NA),
+    strip.text = element_text(color = "white", size = 16)
+  )
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(showtext)
+
+# Add Font Awesome fonts
+font_add('fa-solid', 'fontawesome/otfs/Font Awesome 7 Free-Solid-900.otf')
+showtext_auto()
+
+# helper function 
+create_data <- function(region, on_time, slight, extreme) {
+  data.frame(
+    region = region,
+    category = c(
+      rep("On time", on_time),
+      rep("Slight", slight),
+      rep("Extreme", extreme)
+    )
+  )
+}
+
+# Dados baseados no relatório
+brazil <- create_data("Brazil", 62, 26, 12)
+europe <- create_data("Europe", 48, 27, 25)
+df <- bind_rows(brazil, europe)
+
+df <- df |>
+  group_by(region) |>
+  mutate(
+    id = row_number(),
+    x = (id - 1) %% 10,
+    y = 10 - ((id - 1) %/% 10),
+    label = "\uf072"  # Font Awesome plane icon
+  )
+
+colors <- c(
+  "On time" = "#00FF66",
+  "Slight" = "#FFD700",
+  "Extreme" = "#FF3B30"
+)
+
+ggplot(df, aes(x = x, y = y, label = label, color = category)) +
+  geom_text(size = 6, family = "fa-solid") +
+  scale_color_manual(values = colors) +
+  facet_wrap(~region) +
+  theme_void() +
+  theme(
+    panel.background = element_rect(fill = "#2b2b2b", color = NA),
+    plot.background = element_rect(fill = "#2b2b2b", color = NA),
+    strip.text = element_text(color = "white", size = 16, family = "sans"),
+    legend.position = "bottom",
+    legend.text = element_text(color = "white", size = 12),
+    legend.title = element_blank(),
+    legend.background = element_rect(fill = "#2b2b2b", color = NA)
+  )
+```
+
+## Data Prep
+
+```{}
+bra_punc_url <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/refs/heads/main/data/BRA-punc.csv"
+
+bra_punc <- readr::read_csv(bra_punc_url, show_col_types = FALSE) |> 
+# correct (minimal impact) renamed colums
+  rename("(-20,-15]" = "(-20,-16]","(-15,-10]" = "(-16,-10]") |> 
+  filter(year(DATE) == 2024)
+
+bra_punc |> readr::write_csv("./data/BRA-punc-2024.csv")
+
+# European data
+# ----- note: there is a separate file for LPPT as we changed airports in 2025
+
+url <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-2024.csv"
+url_lppt <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-LPPT-2019-2024.csv"
+
+eur_punc      <- read_csv(url,      show_col_types = FALSE)
+eur_punc_lppt <- read_csv(url_lppt, show_col_types = FALSE)
+
+eur_punc <- eur_punc |> bind_rows(eur_punc_lppt) |> 
+  filter(year(DATE) == 2024) |> 
+  # trim to 10 comparison airports of last year
+  filter(! ICAO %in% c("LIRF","LTFM"))
+
+eur_punc |> rename(APT = ICAO) |> readr::write_csv("./data/EUR-punc-2024.csv")
+```
+
+
+## Viz
+
+```{r}
+# load data
+punc <- fs::dir_ls("data", regexp = "-punc-2024") |> 
+  purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |> 
+  dplyr::bind_rows()
+
+# aggregate by year
+punc <- punc |> mutate(REGION = case_when(
+   grepl("^S", APT)   ~ "BRA"
+  ,grepl("^E|L", APT) ~ "EUR"
+  ,.default = NA
+)) |> 
+  group_by(APT, PHASE, YEAR = lubridate::year(DATE), REGION, N_VALID) |> 
+  reframe(across(.cols = `(-INF,-60]`:`[60,INF)`, .fns = sum))
+
+# helper functions to aggregate the data
+add_dly_early_late_groupings <- function(.punc_df){
+  df <- .punc_df |>  
+    dplyr::mutate(
+        EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE)
+      , WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`)
+      , LATE_P15P45  = rowSums(across(.cols = `[15,20)`:`[40,45)`), na.rm = TRUE)    
+      , LATE_P45P99  = rowSums(across(.cols = `[45,50)`:`[60,INF)`), na.rm = TRUE)
+      )
+}
+
+add_dly_early_late_groupings <- function(.punc_df){
+  df <- .punc_df |>  
+    dplyr::mutate(
+      EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE)
+      ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`)
+      ,EARLY_M05M00 =  `(-5,0]`                 
+      ,LATE_P00P05  =  `(0,5)`                   
+      ,LATE_P05P15  = (`[5,10)` + `[10,15)`)     
+      ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE) 
+      ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)
+      ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`)
+    )
+}
+
+punc2 <- punc |> add_dly_early_late_groupings() |> 
+  select(REGION, EARLY:LATE) |> 
+  group_by(REGION) |> 
+  reframe(N = n(), across(.cols = EARLY:LATE, .fns = ~ sum(.x))) |> 
+  mutate(N_VALID = rowSums(across(EARLY:LATE)))
+```
+
+
+wide to long
+
+```{r}
+#helper for plot table format -- long format
+delay_long <- punc2 |>
+  pivot_longer(
+    cols = EARLY:LATE,
+    names_to = "category",
+    values_to = "share"
+  )
+
+```
+
+
+Totals
+
+```{r}
+SCALE <- 25000
+
+df_total <- delay_long |>
+  mutate(
+    n_icons = round(share / SCALE)
+  ) |>
+  uncount(n_icons) |>
+  group_by(REGION) |>
+  mutate(
+    id = row_number(),
+    x = (id - 1) %% 10,
+    y = 10 - ((id - 1) %/% 10),
+    label = "\uf072"
+  ) |>
+  ungroup()
+
+df_avg <- delay_long |>
+  mutate(
+    share = share / N_VALID,
+    n_icons = round(share * 100)
+  ) |>
+  uncount(n_icons) |>
+  group_by(REGION) |>
+  mutate(
+    id = row_number(),
+    x = (id - 1) %% 10,
+    y = 10 - ((id - 1) %/% 10),
+    label = "\uf072"
+  ) |>
+  ungroup()
+
+```
+
+our colors
+
+```{r}
+our_colors <- c(
+  EARLY           = "#4DA6FF",  # early = blue
+  EARLY_M15M05    = "#80C1FF",  # lighter blue
+  EARLY_M05M00    = "#00FF66",  # punctual green
+  LATE_P00P05     = "#00FF66",  # same punctual green
+  LATE_P05P15     = "#FFB000",  # amber
+  LATE            = "#FF3B30"   # late = red
+)
+
+payload <- df_total
+payload <- df_avg
+
+payload <- payload |> mutate(angle = ifelse(REGION == "BRA", 0, 180))
+
+# mapping old labels to new ones
+label_mapping <- c("BRA" = "Brazil", "EUR" = "Europe")
+
+p <- ggplot(payload, aes(x = x, y = y, label = label, color = category, angle = angle)) +
+  geom_text(size = 28, family = "fa-solid") +
+  scale_color_manual(values = our_colors) +
+  scale_y_discrete(expand = c(0.1,0.1)) +    # squish plotarea - which is 10  x 10
+  facet_wrap(~REGION, labeller = labeller(REGION = label_mapping)) +
+  theme_void() +
+  theme(panel.spacing = unit(1, "cm"))
+  
+fabio_theme <- theme(
+    panel.background = element_rect(fill = "#2b2b2b", color = NA),
+    plot.background  = element_rect(fill = "#2b2b2b", color = NA),
+    strip.text       = element_text(color = "white", size = 16),
+    legend.position  = "bottom",
+    legend.text      = element_text(color = "white", size = 12),
+    legend.title     = element_blank(),
+    legend.background = element_rect(fill = "#2b2b2b", color = NA)
+  )
+
+p + fabio_theme
+```
+
+
+```{r}
+library(ggtext)
+
+our_title <-"Chart-Challenge Day 02 – Pictogram of Average Punctuality at the study airports in Brazil and Europe"
+our_sub <-
+  "There is a higher share of early movements (blue) in Brazil versus a higher share of late movements in Europe."
+our_caption <-
+  "DECEA Performance Section & EUROCONTROL PRU — data provided as part of a study available for download on GitHub."
+
+
+
+day02 <- p + fabio_theme +
+  labs(title = our_title, subtitle = our_sub, caption = our_caption) +
+  theme(base_size = 16
+    , plot.title      = element_textbox_simple(
+                                  width = unit(0.98, "npc"),   # 👈 90% of plot width  
+                                  ,lineheight = 0.2
+                                  ,color = "white", size = rel(6), face = "bold"
+                                  ,margin = margin(b = 15)
+                                  )
+        ,plot.title.position = "plot"
+        ,plot.subtitle = element_textbox_simple(color = "white", size = rel(4)
+                                                ,width = unit(0.98, "npc")
+                                                ,margin = margin(b = 30)
+                                                )
+        ,plot.caption = element_text(color = "white", size = rel(3))
+        ,strip.text = element_text(margin = margin(t = 10, b = 10), size = rel(4), face = "bold"),  # margin in points
+    # Optional: adjust strip background
+    ,strip.background = element_rect(fill = "#2b2b2b", color = "black")
+    ,strip.placement = "inside"
+    # Adjust panel spacing between facets
+#    , panel.spacing = unit(0.5, "lines")
+        ,legend.position = "none"
+        ,plot.margin = margin(10, 10, 10, 10) # Increase margins (top, right, bottom, left)
+        ) 
+
+day02 +
+  canvas(width = 12, height = 8, unit = "in", dpi = 300)
+
+```
+
+
+```{r}
+library(ggview)
+
+day02 +
+  canvas(width = 12, height = 8, unit = "in")
+```
+

@@ -5,3 +5,6 @@
 
 # omit any larger source file
 data-src/
+
+# kill obsolete files
+xx-Day02.qmd
