@@ -3,6 +3,13 @@ title: "Day 02 - pictorgram"
 format: html
 ---
 
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
 ## Prompt / Topic
 
 pictogram
@@ -284,10 +291,11 @@ p + fabio_theme
 
 ```{r}
 library(ggtext)
+library(ggview)
 
 our_title <-"Chart-Challenge Day 02 – Pictogram of Average Punctuality at the study airports in Brazil and Europe"
 our_sub <-
-  "There is a higher share of early movements (blue) in Brazil versus a higher share of late movements in Europe."
+  "There is a higher share of early movements (blue) in Brazil versus a higher share of late movements (red) in Europe."
 our_caption <-
   "DECEA Performance Section & EUROCONTROL PRU — data provided as part of a study available for download on GitHub."
 
@@ -295,19 +303,23 @@ our_caption <-
 
 day02 <- p + fabio_theme +
   labs(title = our_title, subtitle = our_sub, caption = our_caption) +
-  theme(base_size = 16
+  theme(base_size = 11
     , plot.title      = element_textbox_simple(
                                   width = unit(0.98, "npc"),   # 👈 90% of plot width  
-                                  ,lineheight = 0.2
-                                  ,color = "white", size = rel(6), face = "bold"
+                                  ,lineheight = 0.0
+                                  ,color = "white", size = rel(5), face = "bold"
                                   ,margin = margin(b = 15)
                                   )
         ,plot.title.position = "plot"
-        ,plot.subtitle = element_textbox_simple(color = "white", size = rel(4)
+        ,plot.subtitle = element_textbox_simple(color = "white", size = rel(4.5)
                                                 ,width = unit(0.98, "npc")
                                                 ,margin = margin(b = 30)
                                                 )
-        ,plot.caption = element_text(color = "white", size = rel(3))
+        ,plot.caption = element_textbox_simple(
+            hjust = 1 # place at right side
+          , color = "white", size = rel(3)
+          , width = unit(0.32, "npc"), lineheight = 0
+          )
         ,strip.text = element_text(margin = margin(t = 10, b = 10), size = rel(4), face = "bold"),  # margin in points
     # Optional: adjust strip background
     ,strip.background = element_rect(fill = "#2b2b2b", color = "black")
@@ -323,11 +335,4 @@ day02 +
 
 ```
 
-
-```{r}
-library(ggview)
-
-day02 +
-  canvas(width = 12, height = 8, unit = "in")
-```
-
+ggsave("./figures/day02.png", day02, width = 12, height = 8, unit = "in", dpi = 300)
