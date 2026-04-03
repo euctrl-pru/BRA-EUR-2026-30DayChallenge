@@ -214,3 +214,23 @@ ggplot2::ggsave(
       size = 3.3,
       vjust = -0.6
     )
+    
+    
+    
+    
+    
+    mutate(
+        N = rowSums(across(.cols = EARLY:WITHIN_M15P15), na.rm = TRUE),
+        across(
+            .cols  = EARLY:WITHIN_M15P15,
+            .fns   = ~ .x / N
+        )
+        
+        
+        add_dly_early_late_groupings2() |> mutate(
+    N = rowSums(across(.cols = EARLY:WITHIN_M15P15), na.rm = TRUE),
+    across(
+        .cols  = EARLY:WITHIN_M15P15,
+        .fns   = ~ .x / N
+    )) |> glimpse()
+    

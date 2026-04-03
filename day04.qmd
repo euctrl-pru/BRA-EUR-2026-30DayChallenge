@@ -1,0 +1,215 @@
+---
+title: "Untitled"
+format: html
+---
+
+
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+```
+
+
+Dataframe
+
+```{r}
+
+df <- data.frame(
+  year = c("2024", "2024", "2024", "2024",
+           "2025", "2025", "2025", "2025"),
+  REG = c("Brazil", "Europe", "Brazil", "Europe",
+             "Brazil", "Europe", "Brazil", "Europe"),
+  metric = c("Arrival", "Arrival", "Departure", "Departure",
+             "Arrival", "Arrival", "Departure", "Departure"),
+  punctuality = c(80.1, 76.8, 78.4, 75.6,
+                  81.0, 77.3, 79.2, 76.1)
+)
+
+
+
+
+# real dataframe
+
+# bra_punc <- read_csv(here::here("data" , "BRA-punc-2024.csv"))
+
+add_dly_early_late_groupings2 <- function(.punc_df){
+     df <- .punc_df |>  
+         dplyr::mutate(
+             EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE) 
+             ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`) 
+             ,EARLY_M05M00 =  `(-5,0]`                  
+             ,LATE_P00P05  =  `(0,5)`                   
+             ,LATE_P05P15  = (`[5,10)` + `[10,15)`)     
+             ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE) 
+             ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)       
+             ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`) 
+         )
+} 
+
+ bra_punc |>
+     group_by(APT, PHASE) |> 
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) ) 
+     ) |>
+     add_dly_early_late_groupings2() |> 
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|> 
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> glimpse()
+
+```
+
+
+
+```{r}
+
+plot_slope_punctuality_faceted <- function(
+    data,
+    region_var = "REG",
+    value_var = "punctuality",
+    group_var = "year",
+    metric_var = "metric",
+    title = "Brazil vs Europe punctuality comparison",
+    subtitle = "Arrival and departure punctuality shown side by side"
+) {
+  
+  df <- data |>
+    dplyr::select(
+      dplyr::all_of(region_var),
+      dplyr::all_of(value_var),
+      dplyr::all_of(group_var),
+      dplyr::all_of(metric_var)
+    ) |>
+    dplyr::filter(
+      !is.na(.data[[region_var]]),
+      !is.na(.data[[value_var]]),
+      !is.na(.data[[group_var]]),
+      !is.na(.data[[metric_var]])
+    ) |>
+    dplyr::mutate(
+      !!region_var := factor(.data[[region_var]], levels = c("Brazil", "Europe"))
+    )
+  
+  # Keep only complete pairs within each metric/group
+  valid_pairs <- df |>
+    dplyr::distinct(
+      .data[[metric_var]],
+      .data[[group_var]],
+      .data[[region_var]]
+    ) |>
+    dplyr::count(.data[[metric_var]], .data[[group_var]]) |>
+    dplyr::filter(n == 2)
+  
+  df <- df |>
+    dplyr::inner_join(
+      valid_pairs,
+      by = c(metric_var, group_var)
+    ) |>
+    dplyr::select(-n)
+  
+  # Create a wide table for annotations
+  df_wide <- df |>
+    tidyr::pivot_wider(
+      names_from = dplyr::all_of(region_var),
+      values_from = dplyr::all_of(value_var)
+    ) |>
+    dplyr::mutate(
+      gap = Brazil - Europe,
+      abs_gap = abs(gap),
+      gap_label = dplyr::case_when(
+        gap > 0  ~ paste0("Brazil +", round(abs_gap, 1), " p.p."),
+        gap < 0  ~ paste0("Europe +", round(abs_gap, 1), " p.p."),
+        TRUE     ~ "Same level"
+      ),
+      mid_y = (Brazil + Europe) / 2
+    )
+  
+  # Left and right labels
+  df_left <- df |>
+    dplyr::filter(.data[[region_var]] == "Brazil")
+  
+  df_right <- df |>
+    dplyr::filter(.data[[region_var]] == "Europe")
+  
+  ggplot2::ggplot(
+    df,
+    ggplot2::aes(
+      x = .data[[region_var]],
+      y = .data[[value_var]],
+      group = .data[[group_var]],
+      color = .data[[group_var]]
+    )
+  ) +
+    ggplot2::geom_line(linewidth = 1.2, alpha = 0.85, lineend = "round") +
+    ggplot2::geom_point(size = 3) +
+    
+    ggplot2::geom_text(
+      data = df_left,
+      ggplot2::aes(label = paste0(round(.data[[value_var]], 1), "%")),
+      hjust = 1.15,
+      size = 3.5,
+      show.legend = FALSE
+    ) +
+    
+    ggplot2::geom_text(
+      data = df_right,
+      ggplot2::aes(label = paste0(round(.data[[value_var]], 1), "%")),
+      hjust = -0.15,
+      size = 3.5,
+      show.legend = FALSE
+    ) +
+    
+        ggplot2::facet_wrap(stats::as.formula(paste("~", metric_var)), nrow = 1) +
+    
+    ggplot2::scale_x_discrete(expand = ggplot2::expansion(mult = c(0.18, 0.35))) +
+    ggplot2::scale_y_continuous(
+      expand = ggplot2::expansion(mult = c(0.08, 0.08))
+    ) +
+    
+    ggplot2::coord_cartesian(clip = "off") +
+    
+    ggplot2::labs(
+      title = title,
+      subtitle = subtitle,
+      x = NULL,
+      y = "Punctuality (%)",
+      color = "Year",
+      caption = "Gap labels show the punctuality advantage in percentage points."
+    ) +
+    
+    ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major.x = ggplot2::element_blank(),
+      axis.text.x = ggplot2::element_text(size = 11, face = "bold"),
+      strip.text = ggplot2::element_text(size = 12, face = "bold"),
+      plot.title = ggplot2::element_text(size = 16, face = "bold"),
+      plot.subtitle = ggplot2::element_text(size = 11),
+      plot.caption = ggplot2::element_text(size = 9),
+      legend.position = "bottom",
+      plot.margin = ggplot2::margin(t = 15, r = 95, b = 15, l = 35)
+    )
+}
+
+```
+
+
+
+
+
+```{r}
+
+ggplot2::ggsave(
+  filename = "slope_arrival_departure_brazil_europe.png",
+  plot = p,
+  width = 12,
+  height = 8,
+  dpi = 300,
+  bg = "white"
+)
+
+
+# p <- plot_slope_punctuality_faceted(df)
+
+```
