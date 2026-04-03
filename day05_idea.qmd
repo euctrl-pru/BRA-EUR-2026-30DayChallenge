@@ -1,0 +1,180 @@
+---
+title: "day 05 - experimental"
+format: html
+---
+
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+```
+
+
+### fourth 
+
+```{r}
+
+
+df_orbital_example <- tibble::tibble(
+  airport = c("SBGR", "SBGL", "SBBR", "LPPT", "LEMD", "LFPG", "EHAM"),
+  region = c("Brazil", "Brazil", "Brazil", "Europe", "Europe", "Europe", "Europe"),
+  movements = c(25500, 18800, 15700, 21500, 33500, 36500, 34800),
+  arrival_punctuality = c(80.4, 82.6, 85.7, 79.3, 76.9, 78.5, 81.2)
+)
+
+```
+
+
+```{r}
+
+plot_orbital_operational_map <- function(
+  data,
+  airport_var = "airport",
+  region_var = "region",
+  traffic_var = "movements",
+  punctuality_var = "arrival_punctuality",
+  punctuality_target = 85,
+  title = "Orbital Operational Map",
+  subtitle = "Airport position by traffic volume and punctuality gap"
+) {
+  
+  # Validate required columns
+  required_cols <- c(airport_var, region_var, traffic_var, punctuality_var)
+  
+  missing_cols <- required_cols[!required_cols %in% names(data)]
+  
+  if (length(missing_cols) > 0) {
+    stop(
+      paste(
+        "Missing required columns:",
+        paste(missing_cols, collapse = ", ")
+      )
+    )
+  }
+  
+  # Prepare dataset
+  df <- data |>
+    dplyr::select(dplyr::all_of(required_cols)) |>
+    dplyr::filter(
+      !is.na(.data[[airport_var]]),
+      !is.na(.data[[region_var]]),
+      !is.na(.data[[traffic_var]]),
+      !is.na(.data[[punctuality_var]])
+    ) |>
+    dplyr::distinct() |>
+    dplyr::arrange(.data[[region_var]], dplyr::desc(.data[[traffic_var]])) |>
+    dplyr::mutate(
+      performance_gap = pmax(0, punctuality_target - .data[[punctuality_var]]),
+      orbit_radius = 1 + performance_gap,
+      angle = seq(0, 2 * pi, length.out = dplyr::n() + 1)[1:dplyr::n()],
+      x = orbit_radius * cos(angle),
+      y = orbit_radius * sin(angle)
+    )
+  
+  # Create ring data
+  ring_values <- c(1, 3, 5, 7, 9)
+  
+  ring_data <- tibble::tibble(
+    ring = ring_values
+  )
+  
+  # Build plot
+  p <- ggplot2::ggplot() +
+    ggplot2::geom_path(
+      data = purrr::map_dfr(
+        ring_values,
+        function(r) {
+          tibble::tibble(
+            ring = r,
+            theta = seq(0, 2 * pi, length.out = 300),
+            x = r * cos(theta),
+            y = r * sin(theta)
+          )
+        }
+      ),
+      ggplot2::aes(x = x, y = y, group = ring),
+      color = "grey80",
+      linewidth = 0.5
+    ) +
+    ggplot2::geom_point(
+      data = df,
+      ggplot2::aes(
+        x = x,
+        y = y,
+        size = .data[[traffic_var]],
+        color = .data[[region_var]]
+      ),
+      alpha = 0.9
+    ) +
+    ggplot2::geom_point(
+      x = 0,
+      y = 0,
+      size = 5,
+      shape = 21,
+      fill = "white",
+      color = "black",
+      stroke = 1.2
+    ) +
+    ggrepel::geom_text_repel(
+      data = df,
+      ggplot2::aes(
+        x = x,
+        y = y,
+        label = .data[[airport_var]],
+        color = .data[[region_var]]
+      ),
+      size = 4.2,
+      box.padding = 0.35,
+      point.padding = 0.3,
+      segment.alpha = 0.5,
+      show.legend = FALSE
+    ) +
+    ggplot2::annotate(
+      "text",
+      x = 0,
+      y = 0,
+      label = "Target",
+      fontface = "bold",
+      size = 4
+    ) +
+    ggplot2::annotate(
+      "text",
+      x = ring_values,
+      y = 0,
+      label = paste0("Gap ", ring_values - 1),
+      color = "grey45",
+      size = 3.3,
+      vjust = -0.6
+    ) +
+    ggplot2::scale_size_continuous(
+      range = c(5, 16),
+      name = "Movements"
+    ) +
+    ggplot2::coord_equal() +
+    ggplot2::labs(
+      title = title,
+      subtitle = subtitle,
+      color = "Region"
+    ) +
+    ggplot2::theme_void(base_size = 13) +
+    ggplot2::theme(
+      legend.position = "right",
+      plot.title = ggplot2::element_text(face = "bold", size = 18),
+      plot.subtitle = ggplot2::element_text(size = 12)
+    )
+  
+  return(p)
+}
+
+```
+
+
+```{r}
+
+preview_plot(
+  plot_orbital_operational_map(df_orbital_example),
+  width = 12,
+  height = 10
+)
+
+```
