@@ -18,13 +18,13 @@ Dataframe
 ```{r}
 
 df <- data.frame(
-  year = c("2024", "2024", "2024", "2024",
+  YEAR = c("2024", "2024", "2024", "2024",
            "2025", "2025", "2025", "2025"),
   REG = c("Brazil", "Europe", "Brazil", "Europe",
              "Brazil", "Europe", "Brazil", "Europe"),
-  metric = c("Arrival", "Arrival", "Departure", "Departure",
+  PHASE = c("Arrival", "Arrival", "Departure", "Departure",
              "Arrival", "Arrival", "Departure", "Departure"),
-  punctuality = c(80.1, 76.8, 78.4, 75.6,
+  N = c(61.8, 57.1, 79.7, 60.6,
                   81.0, 77.3, 79.2, 76.1)
 )
 
@@ -33,30 +33,53 @@ df <- data.frame(
 
 # real dataframe
 
-# bra_punc <- read_csv(here::here("data" , "BRA-punc-2024.csv"))
+## function to data preparation
 
 add_dly_early_late_groupings2 <- function(.punc_df){
-     df <- .punc_df |>  
+     df <- .punc_df |>
          dplyr::mutate(
-             EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE) 
-             ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`) 
-             ,EARLY_M05M00 =  `(-5,0]`                  
-             ,LATE_P00P05  =  `(0,5)`                   
-             ,LATE_P05P15  = (`[5,10)` + `[10,15)`)     
-             ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE) 
-             ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)       
-             ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`) 
+             EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE)
+             ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`)
+             ,EARLY_M05M00 =  `(-5,0]`
+             ,LATE_P00P05  =  `(0,5)`
+             ,LATE_P05P15  = (`[5,10)` + `[10,15)`)
+             ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE)
+             ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)
+             ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`)
          )
-} 
+}
+
+## Brazil
+
+bra_punc <- read_csv(here::here("data" , "BRA-punc-2024.csv"))
 
  bra_punc |>
-     group_by(APT, PHASE) |> 
+     group_by(PHASE) |>
      reframe(CHECK = n()
-             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) ) 
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
      ) |>
-     add_dly_early_late_groupings2() |> 
-     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|> 
-     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> glimpse()
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15) |>
+     mutate(REG = "BRA" , YEAR = "2024")
+ 
+ 
+ 
+ ## Europe
+ 
+ eur_punc <- read_csv(here::here("data" , "EUR-punc-2024.csv"))
+ 
+  eur_punc |>
+     group_by(PHASE) |>
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
+     ) |>
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15) |>
+     mutate(REG = "EUR" , YEAR = "2024")
 
 ```
 
@@ -67,9 +90,9 @@ add_dly_early_late_groupings2 <- function(.punc_df){
 plot_slope_punctuality_faceted <- function(
     data,
     region_var = "REG",
-    value_var = "punctuality",
-    group_var = "year",
-    metric_var = "metric",
+    value_var = "N",
+    group_var = "YEAR",
+    metric_var = "PHASE",
     title = "Brazil vs Europe punctuality comparison",
     subtitle = "Arrival and departure punctuality shown side by side"
 ) {
@@ -174,8 +197,7 @@ plot_slope_punctuality_faceted <- function(
       subtitle = subtitle,
       x = NULL,
       y = "Punctuality (%)",
-      color = "Year",
-      caption = "Gap labels show the punctuality advantage in percentage points."
+      color = "Year"
     ) +
     
     ggplot2::theme_minimal(base_size = 12) +
@@ -210,6 +232,6 @@ ggplot2::ggsave(
 )
 
 
-# p <- plot_slope_punctuality_faceted(df)
+p <- plot_slope_punctuality_faceted(df)
 
 ```
