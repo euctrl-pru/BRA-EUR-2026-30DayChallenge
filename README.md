@@ -55,3 +55,9 @@ Conceptual building blocks
 ![Day-02 contribution](figures/day02.png)
 
 ### Day 3 - "mosaic"
+
+TODO - Some explanatory notes to follow 
+
+![Day-03 contribution, mosaic](figures/day03-mosaic.jpeg)
+
+### Day 4 - "slope"
