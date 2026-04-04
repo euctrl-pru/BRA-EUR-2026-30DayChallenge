@@ -1,0 +1,246 @@
+---
+title: "Day 06 - reporter without borders"
+format: html
+---
+
+```{r}
+library(dplyr)   # data crunching
+library(ggplot2) # viz
+```
+
+
+## Data retrieval for "reporters without borders"
+
+Kudos to Peter Baumgartner and his description of how to downlaod and access the reporters-without-borders (reporters sans frontiers) data: https://bookdown.org/pbaumgartner/rwb-book/011-get-rwb-data.html.
+
+DATA DOWNLOADED FOR 2022 - 2025 - CLEAN. SKIP NEXT CHUNKS.
+
+```{r}
+# taken from https://bookdown.org/pbaumgartner/rwb-book/011-get-rwb-data.html
+url <- "https://rsf.org/sites/default/files/import_classement/"
+
+rsf_year <- function(year) {
+    rsf_name <- paste0(url, year, ".csv")
+    readr::read_delim(rsf_name,
+                      delim = ";", 
+                      escape_double = FALSE, 
+                      trim_ws = TRUE,
+                      show_col_types = FALSE)
+}
+
+
+# per description we work with the 2022-2025 data
+our_years <- list(
+    #"2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010",
+    # 2011 is missing
+    #"2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020",
+    #"2021", 
+  "2022", "2023", "2024", "2025")
+
+#rsf <- our_years |> purrr::map(.f = ~ rsf_year(.x) )
+```
+
+ON PETER'S PAGE - CODE 1.7 HIGHLIGHTS THE CLEANED DATA --> get this!
+
+```{r}
+#| eval: false
+url <- "https://raw.githubusercontent.com/petzi53/rwb-book/master/data/chap011/rwb/rwb1.rds"
+
+download.file(url, destfile = "rwb1.rds", mode = "wb")
+
+rwb <- readRDS("rwb1.rds")
+rwb |> readr::write_csv("./data/reporter-whithout-borders-2022-2025.csv")
+```
+
+## Exploration
+
+```{r}
+# load data
+rwb <- readr::read_csv("./data/reporter-whithout-borders-2022-2025.csv", show_col_types = FALSE)
+
+rwb |> glimpse()
+```
+
+* 195 countries = difficult to plot per country ==> either subset or groups
+* data set has evolution year_n/score/rank vs rank_n_1 and score_n_1 ~ no need to calculate this (thanks Peter)
+* zone is a "geographic" or reporter score relevant regional grouping => 8 zones
+rwb |> distinct(zone)
+# A tibble: 8 × 1
+  zone                  
+  <chr>                 
+1 Asie-Pacifique        
+2 UE Balkans            
+3 MENA                  
+4 Afrique               
+5 Amériques             
+6 EEAC                  
+7 Europe - Asie centrale
+8 Maghreb - Moyen-Orient
+
+## Initial idea
+
+* showing change 2024-2025 ~~ difficult for number of countries ~~ volcano chart to show "biggest changes"
+* classical barchart showing index for each country  ~~ tiles     
+
+### Volcano Plot
+
+change from 2024 to 2025 already calculated in data
+
+payload
+
+* country_en
+* year_n
+* score_evolution
+
+```{r}
+library(ggrepel)     # deconflict labels
+
+# prep data - volcano --> change per country for 2025 vs 2024
+rwb_volcano <- rwb |>
+  # ------------------- get payload & trim to 2025 with change
+  select(country_en, year_n, score_evolution) |> 
+  filter(year_n == 2025) |>
+  
+  # codify "change" direction
+  mutate(
+    direction = case_when(
+      score_evolution > 0 ~ "Improved",
+      score_evolution < 0 ~ "Declined",
+      .default = "No change"
+        ),
+    direction = factor(
+      direction
+      , levels = c("Improved", "Declined", "No change"))
+    )
+
+p <- ggplot(
+  rwb_volcano
+  , aes(
+      x = score_evolution,
+      y = abs(score_evolution),     # volcano -> negative values up!
+      color = direction
+      )
+  ) +
+    geom_point(alpha = 0.7, size = 3) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    scale_color_manual(values = c(
+        "Improved" = "#1a9850",
+        "Declined" = "#d73027",
+        "No change" = "gray60"
+    )) +
+    ggrepel::geom_text_repel(
+        data = rwb_volcano |> filter(abs(score_evolution) > 5),
+        aes(label = country_en),
+        size = 3,
+        max.overlaps = 20
+    )
+
+p +
+    theme_minimal(base_size = 14) +
+    labs(
+        title = "Volcano Plot of Press Freedom Score Changes (2025)",
+        subtitle = "Horizontal = direction of change • Vertical = magnitude of change",
+        x = "Score Evolution (2025 vs 2024)",
+        y = "Magnitude of Change",
+        color = "Direction"
+    )
+
+```
+
+
+
+### "Tiled" Bar Chart
+
+tile = country <==> fill = score
+
+==> payload:
+* year_n      year of observation
+* country_en  "object" ~ country of observation
+* zone        regional grouping per RWB
+* score       assigned score
+
+
+```{r}
+#| fig-height: 6     # increase standard size to make is less squished
+
+
+rwb_tiles <- rwb |> 
+  # subset to payload
+  select(year_n, country_en, zone, score) |> 
+  # group by zone and arrange for index sequence, set index = row_number
+  group_by(year_n, zone) |> 
+  arrange(score, .by_group = TRUE) |> 
+  mutate(order = row_number())
+
+p <- ggplot(rwb_tiles, aes(x = order, y = zone, fill = score)) +
+  geom_tile(color = "white") +                # tile borders
+  scale_fill_viridis_c(option = "C") +
+  facet_wrap(~ year_n, ncol = 1) +
+  theme_minimal() +
+  labs(title = "Press Freedom Score Mosaic by Zone")
+
+p
+```
+
+## Beautification
+
+```{r}
+library(ggview)   # gives us "correct" graph dimensions -> use canvas()
+library(ggtext)   # for textbox_simple
+library(showtext)
+
+# ---------------- set canvas parameters
+our_height <- 8
+our_width  <- 8
+our_unit   <- "in"
+our_dpi    <- 300
+
+#----------------- put self-speaking titles 
+our_title <- "<span style = 'font-size:12pt'>*Day 06 - Reporters Without Borders -*</span> <br>**Press Freedom Score by Zone**"
+our_subtitle <- "For each zone, countries are ranked in accordance with their annual press freedom score. Data completeness varies across the years for all zones."
+our_caption <- "Performance Section DECEA and PRU EUROCONTROL<br>Data: Reporters Without Borders <br>Data preparation: Peter Baumgartner (raw.githubusercontent.com/petzi53/rwb-book/master/data/chap011/rwb/rwb1.rds)"
+
+day06 <- p +
+  
+  labs(x = NULL, y = NULL,
+       title = our_title     # control with theme & textboxsimple
+       ,subtitle = our_subtitle
+       ,caption = our_caption
+       ,fill = "press \nfreedom \nscore"
+       ) +
+  theme_minimal(base_size = 14) +
+  theme(
+     plot.title = element_textbox_simple(margin = margin(b = 10))
+    ,plot.title.position = "plot"
+    ,plot.subtitle = element_textbox_simple()
+    ,plot.caption = element_textbox_simple(
+       size   = rel(0.7)
+      ,margin = margin(t = 10)
+    )
+    ,plot.caption.position = "plot"
+    
+    ,legend.position = c(0.98, 1.2)             # near top-right
+    ,legend.justification = c("right", "top")
+    ,legend.direction = "horizontal",
+    ,legend.text  = element_text(size = rel(0.7))
+    ,legend.title = element_text(size = rel(0.8)) 
+  )
+
+day06 <- day06 +
+  canvas(width = our_width, height = our_height, units = our_unit, dpi = our_dpi)
+
+day06
+```
+
+save out the final plot
+
+what_day     = "06"     # correct this to the right day! = do not overwrite other files
+our_filename = paste0("./figures/day", what_day,".png")  
+our_filename
+
+ggsave(our_filename
+      , width = our_width
+      , height = our_height
+      , unit = our_unit
+      , dpi = our_dpi)
+
