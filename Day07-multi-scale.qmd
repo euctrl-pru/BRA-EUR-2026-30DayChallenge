@@ -1,0 +1,107 @@
+---
+title: "Day 07 - multi-scale"
+format: html
+---
+
+## Idea
+
+show distribution per region --> scale ~ variation, scale ~ region
+
+work with a subset of the KPIs (default to traffic and punctuality)
+
+## distribution ~ ridgeline
+
+### data preparation
+
+```{r}
+# load data
+punc <- fs::dir_ls("data", regexp = "-punc-2024") |> 
+  purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |> 
+  dplyr::bind_rows()
+
+# label regions
+punc <- punc |> mutate(REGION = case_when(
+   grepl("^S", APT)   ~ "BRA"
+  ,grepl("^E|L", APT) ~ "EUR"
+  ,.default = NA
+))
+
+
+# helper functions to aggregate the data
+add_dly_early_late_groupings <- function(.punc_df){
+  df <- .punc_df |>  
+    dplyr::mutate(
+      EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE)
+      ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`)
+      ,EARLY_M05M00 =  `(-5,0]`                 
+      ,LATE_P00P05  =  `(0,5)`                   
+      ,LATE_P05P15  = (`[5,10)` + `[10,15)`)     
+      ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE) 
+      ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)
+      ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`)
+    )
+}
+
+daily_punc <- punc |> 
+  add_dly_early_late_groupings() |> 
+  dplyr::select(APT, DATE, PHASE, REGION, EARLY:LATE) |> 
+  dplyr::group_by(REGION, APT, DATE, PHASE) |> 
+  dplyr::mutate(N_VALID = rowSums(dplyr::across(EARLY:LATE)))  |> 
+  dplyr::ungroup()
+
+daily_punc <- daily_punc |> 
+  dplyr::mutate(PUNC = rowSums(dplyr::across(EARLY_M15M05:LATE_P05P15)) / N_VALID)
+```
+
+
+df  # one row per airport per time-unit (day/week/year)
+# region   : "BRA" / "EUR"
+# airport  : airport code (ICAO)
+# period   : Date (daily), or week start date, or year (numeric)
+# kpi      : numeric value (e.g., arrival punctuality % or delay minutes)
+# movements: optional numeric weights (e.g., flights)
+
+
+
+
+### exploratory graph - ridgeline
+
+```{r}
+library(ggplot2)
+```
+
+
+
+```{r}
+daily_punc |> dplyr::filter(PHASE == "ARR") |> 
+  ggplot(aes(x = PUNC, colour = REGION, weight = N_VALID)) +
+  geom_density(adjust = 1) +
+  facet_wrap(~ APT, scales = "free_y")
+```
+
+
+
+library(ggplot2)
+library(ggridges)
+
+ggplot(df, aes(x = kpi, y = airport, fill = region, weight = movements)) +
+  geom_density_ridges(alpha = 0.6, scale = 1) 
+  
+  
+ ggplot(df, aes(x = kpi, y = airport, weight = movements)) +
+  geom_density_ridges(scale = 1) +
+  facet_wrap(~ region)
+  
+  
+---------
+
+library(ggplot2)
+library(ggdist)
+
+ggplot(df, aes(y = airport, x = kpi)) +
+  ggdist::stat_halfeye() +
+  facet_wrap(~ region)
+  
+ggplot(df, aes(y = airport, x = kpi, fill = region)) +
+  ggdist::stat_halfeye(alpha = 0.6, position = "identity")
+  
