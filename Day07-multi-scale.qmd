@@ -122,6 +122,18 @@ piep <- punc_annual |>
   punctuality_as_percentage()
 
 piep |> dplyr::glimpse()
+
+
+aptview <- piep |>
+     group_by(PHASE , YEAR , REGION , APT) |>
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
+     ) |>
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15 ,YEAR , REGION , APT) |> print()
+
 ```
 
 
@@ -164,58 +176,57 @@ theme_day07 <- function(base_size = 11) {
 }
 
 
-# ── Level 1: Network aggregates ───────────────────────────────────────────────
-df_network <- tribble(
-  ~region, ~year, ~pct_ontime, ~avg_delay_min,
-  "BRA",   2023,   74.1,        18.3,
-  "BRA",   2024,   76.8,        16.7,
-  "EUR",   2023,   82.4,         9.8,
-  "EUR",   2024,   83.9,         9.1
-) |>
-  mutate(year = factor(year))
-
 # ── Level 2: Airport-level summary ───────────────────────────────────────────
 set.seed(42)
 
-bra_airports <- tibble(
-  region       = "BRA",
-  airport_icao = c("SBGR","SBSP","SBBR","SBGL","SBCF",
-                   "SBRF","SBSV","SBPA","SBFZ","SBCT",
-                   "SBMO","SBVT"),
-  airport_name = c("Guarulhos","Congonhas","Brasília","Galeão","Confins",
-                   "Recife","Salvador","Porto Alegre","Fortaleza","Curitiba",
-                   "Maceió","Vitória"),
-  base_ontime  = c(72, 80, 75, 68, 76, 71, 74, 78, 73, 80, 69, 77),
-  base_delay   = c(19, 14, 17, 22, 16, 20, 18, 15, 19, 14, 21, 16)
+scopetable_raw <- readr::read_csv(here::here("data", "study_airports_BRA_EUR.csv"))
+
+scopetable <- bind_rows(
+  scopetable_raw |>
+    transmute(
+      REGION       = "BRA",
+      AIRPORT_NAME = str_remove(Brazil, "\\s*\\(\\w+\\)$") |> str_trim(),
+      AIRPORT_ICAO = str_extract(Brazil, "(?<=\\()\\w+(?=\\))")
+    ),
+  scopetable_raw |>
+    transmute(
+      REGION       = "EUR",
+      AIRPORT_NAME = str_remove(Europe, "\\s*\\(\\w+\\)$") |> str_trim(),
+      AIRPORT_ICAO = str_extract(Europe, "(?<=\\()\\w+(?=\\))")
+    )
 )
 
-eur_airports <- tibble(
-  region       = "EUR",
-  airport_icao = c("EGLL","LFPG","EDDF","LEMD","LIRF",
-                   "EHAM","LEBL","LPPT","EDDM","LSZH",
-                   "LOWW","EPWA"),
-  airport_name = c("London LHR","Paris CDG","Frankfurt","Madrid","Rome FCO",
-                   "Amsterdam","Barcelona","Lisbon","Munich","Zurich",
-                   "Vienna","Warsaw"),
-  base_ontime  = c(80, 82, 85, 83, 78, 86, 84, 87, 88, 89, 86, 82),
-  base_delay   = c(11,  9,  8, 10, 13,  7,  9,  7,  6,  5,  7,  9)
-)
+# ── Dados fictícios por aeroporto ─────────────────────────────────────────────
+bra_airports <- scopetable |>
+  filter(REGION == "BRA") |>
+  mutate(
+    BASE_ONTIME = c(75, 80, 74, 71, 76, 73, 74, 78, 72, 80, 71, 73),
+    BASE_DELAY  = c(17, 14, 18, 22, 16, 19, 18, 15, 19, 14, 20, 18)
+  )
 
-# Generate 2023 and 2024 with small realistic variation
+eur_airports <- scopetable |>
+  filter(REGION == "EUR") |>
+  mutate(
+    BASE_ONTIME = c(86, 82, 80, 85, 88, 83, 84, 87, 88, 89, 82, 83),
+    BASE_DELAY  = c( 7,  9, 11,  8,  6, 10,  9,  7,  6,  5,  9,  8)
+  )
+
+# ── Gera variação anual ───────────────────────────────────────────────────────
 make_yearly <- function(df, yr, noise_sd_ot = 2.5, noise_sd_dl = 1.8) {
   df |>
     mutate(
-      year        = factor(yr),
-      pct_ontime  = pmax(55, pmin(97,
-                      base_ontime + rnorm(n(), mean = ifelse(yr == 2024, 1.5, 0),
-                                         sd = noise_sd_ot))),
-      avg_delay   = pmax(3,
-                      base_delay  + rnorm(n(), mean = ifelse(yr == 2024, -0.8, 0),
-                                         sd = noise_sd_dl))
+      YEAR       = factor(yr),
+      PCT_ONTIME = pmax(55, pmin(97,
+                     BASE_ONTIME + rnorm(n(), mean = ifelse(yr == 2024, 1.5, 0),
+                                        sd = noise_sd_ot))),
+      AVG_DELAY  = pmax(3,
+                     BASE_DELAY  + rnorm(n(), mean = ifelse(yr == 2024, -0.8, 0),
+                                        sd = noise_sd_dl))
     ) |>
-    select(-base_ontime, -base_delay)
+    select(-BASE_ONTIME, -BASE_DELAY)
 }
 
+set.seed(42)
 df_airport <- bind_rows(
   make_yearly(bra_airports, 2023),
   make_yearly(bra_airports, 2024),
@@ -223,150 +234,153 @@ df_airport <- bind_rows(
   make_yearly(eur_airports, 2024)
 )
 
-# =============================================================================
-# PANEL 1 – NETWORK LEVEL (lollipop)
-# =============================================================================
+# ── Network aggregates ────────────────────────────────────────────────────────
+df_network <- tribble(
+  ~REGION, ~YEAR, ~PCT_ONTIME, ~AVG_DELAY,
+  "BRA",   2023,   65.0,        18.3,
+  "BRA",   2024,   61.8,        16.7,
+  "EUR",   2023,   56.3,         9.8,
+  "EUR",   2024,   57.1,         9.1
+) |>
+  mutate(YEAR = factor(YEAR))
 
+theme_day07 <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      plot.title         = element_text(size = rel(1.05), face = "bold",
+                                        margin = margin(b = 4)),
+      plot.subtitle      = element_text(size = rel(0.82), color = "#555577",
+                                        margin = margin(b = 8)),
+      axis.text          = element_text(size = rel(0.82)),
+      axis.title         = element_text(size = rel(0.85)),
+      panel.grid.minor   = element_blank(),
+      panel.grid.major.y = element_line(color = "#e8e8f0", linewidth = 0.4),
+      panel.grid.major.x = element_line(color = "#e8e8f0", linewidth = 0.4),
+      strip.text         = element_text(face = "bold", size = rel(0.88)),
+      strip.background   = element_rect(fill = "#f0f0f8", color = NA),
+      legend.position    = "bottom",
+      plot.background    = element_rect(fill = "#fafafa", color = NA),
+      panel.background   = element_rect(fill = "#fafafa", color = NA)
+    )
+}
+
+# ── P1: Network ───────────────────────────────────────────────────────────────
 p1 <- ggplot(df_network,
-             aes(x = pct_ontime, y = region, color = year, group = region)) +
-  # connecting line between years
+             aes(x = PCT_ONTIME, y = REGION,
+                 color = REGION, group = REGION)) +
   geom_line(color = "#ccccdd", linewidth = 1.8, lineend = "round") +
-  geom_point(aes(color = year), size = 5) +
-  geom_text(aes(label = sprintf("%.1f%%", pct_ontime), color = year),
-            nudge_y = 0.28, size = 3.2, fontface = "bold") +
-  geom_vline(xintercept = THRESHOLD, linetype = "dashed",
-             color = "#cc3333", linewidth = 0.6, alpha = 0.7) +
-  annotate("text", x = THRESHOLD + 0.3, y = 2.45, label = "80% target",
-           color = "#cc3333", size = 3, hjust = 0, fontface = "italic") +
-  scale_x_continuous(limits = c(60, 95),
-                     labels = label_number(suffix = "%")) +
-  scale_color_manual(values = c("2023" = "#aaaaaa", "2024" = "#333355"),
-                     name = "Year") +
-  scale_y_discrete(labels = c("BRA" = "🇧🇷  Brazil", "EUR" = "🇪🇺  Europe")) +
+  geom_point(aes(shape = YEAR), size = 4) +
+  ggrepel::geom_text_repel(
+    aes(label = sprintf("%.1f%%", PCT_ONTIME)),
+    nudge_y    = 0.25,
+    size       = 3.2,
+    fontface   = "bold",
+    direction  = "x",       # ← só repele no eixo x
+    segment.color = NA      # ← sem linha de conexão
+  ) +
+  scale_color_manual(values = pal_region, guide = "none") +
+  scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
+    scale_x_continuous(
+    limits = c(50, 80),                             
+    labels = scales::label_number(suffix = "%")
+  ) +
+  scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
   labs(
     title    = "① Network — Headline Punctuality",
     subtitle = "Network-wide % on-time arrivals · 2023 vs 2024",
     x = "% On-Time Arrivals", y = NULL
   ) +
-  theme_day07() +
-  theme(
-    panel.grid.major.y = element_blank(),
-    axis.text.y = element_text(size = 12)
-  )
+  theme_day07()
 
-# =============================================================================
-# PANEL 2 – AIRPORT LEVEL (slope / dot-range)
-# =============================================================================
+# ── P2: Airport slope ─────────────────────────────────────────────────────────
 
-# Wide for slope arrows
-df_airport_wide <- df_airport |>
-  select(region, airport_icao, airport_name, year, pct_ontime) |>
-  pivot_wider(names_from = year, values_from = pct_ontime,
-              names_prefix = "y") |>
+df_airport <- aptview |>
+  filter(PHASE == "ARR") |>
   mutate(
-    improved = y2024 >= y2023,
-    region_label = if_else(region == "BRA", "🇧🇷  Brazil", "🇪🇺  Europe")
-  )
+    PCT_ONTIME   = WITHIN_M15P15 * 100,
+    YEAR         = factor(YEAR),
+    AIRPORT_ICAO = APT
+  ) |>
+  left_join(
+    scopetable |> select(AIRPORT_ICAO, AIRPORT_NAME, REGION),
+    by = c("AIRPORT_ICAO", "REGION")
+  ) |>
+  select(REGION, AIRPORT_ICAO, AIRPORT_NAME, YEAR, PCT_ONTIME)
 
-# Reorder airports within each facet by 2024 value
-df_airport_wide <- df_airport_wide |>
-  group_by(region) |>
-  mutate(airport_fct = fct_reorder(airport_icao, y2024)) |>
+
+df_airport_wide <- df_airport |>
+  select(REGION, AIRPORT_ICAO, AIRPORT_NAME, YEAR, PCT_ONTIME) |>
+  pivot_wider(names_from = YEAR, values_from = PCT_ONTIME,
+              names_prefix = "Y") |>
+  group_by(REGION) |>
+  mutate(AIRPORT_FCT = fct_reorder(AIRPORT_ICAO, Y2024)) |>
   ungroup()
 
-# Rebuild long for geom_point overlay
 df_airport_long <- df_airport_wide |>
-  pivot_longer(c(y2023, y2024), names_to = "year", values_to = "pct_ontime") |>
-  mutate(year = recode(year, y2023 = "2023", y2024 = "2024"))
+  pivot_longer(c(Y2023, Y2024), names_to = "YEAR", values_to = "PCT_ONTIME") |>
+  mutate(YEAR = recode(YEAR, Y2023 = "2023", Y2024 = "2024"))
 
-p2 <- ggplot(df_airport_wide,
-             aes(y = airport_fct)) +
-  # Segment 2023→2024
-  geom_segment(aes(x = y2023, xend = y2024,
-                   yend = airport_fct,
-                   color = region),
+p2 <- ggplot(df_airport_wide, aes(y = AIRPORT_FCT)) +
+  geom_segment(aes(x = Y2023, xend = Y2024,
+                   yend = AIRPORT_FCT, color = REGION),
                linewidth = 1.2, alpha = 0.45,
                arrow = arrow(length = unit(0.12, "cm"), type = "closed")) +
-  # 2023 dot (open)
-  geom_point(data = df_airport_long |> filter(year == "2023"),
-             aes(x = pct_ontime, color = region),
+  geom_point(data = df_airport_long |> filter(YEAR == "2023"),
+             aes(x = PCT_ONTIME, color = REGION),
              size = 2.5, shape = 21, fill = "white", stroke = 1.2) +
-  # 2024 dot (filled)
-  geom_point(data = df_airport_long |> filter(year == "2024"),
-             aes(x = pct_ontime, color = region),
+  geom_point(data = df_airport_long |> filter(YEAR == "2024"),
+             aes(x = PCT_ONTIME, color = REGION),
              size = 2.5, shape = 16) +
-  geom_vline(xintercept = THRESHOLD, linetype = "dashed",
-             color = "#cc3333", linewidth = 0.5, alpha = 0.7) +
-  facet_wrap(~region_label, scales = "free_y", ncol = 2) +
+  facet_wrap(~REGION, scales = "free_y", ncol = 2,
+             labeller = labeller(REGION = c("BRA" = "Brazil",
+                                            "EUR" = "Europe"))) +
   scale_color_manual(values = pal_region, guide = "none") +
-  scale_x_continuous(limits = c(58, 97),
-                     labels = label_number(suffix = "%")) +
+  scale_x_continuous(limits = c(40, 80),
+                     labels = scales::label_number(suffix = "%")) +
   labs(
     title    = "② Airport — Where Does the Gap Live?",
-    subtitle = "Each airport: ○ 2023 → ● 2024 (arrow shows direction of change)",
+    subtitle = "Each airport: ○ 2023 → ● 2024",
     x = "% On-Time Arrivals", y = NULL
   ) +
   theme_day07() +
   theme(axis.text.y = element_text(size = 8))
 
-# =============================================================================
-# PANEL 3 – DISTRIBUTION (density / half-violin of airport values)
-# =============================================================================
-
-df_dist <- df_airport |>
-  mutate(
-    region_label = if_else(region == "BRA", "🇧🇷  Brazil", "🇪🇺  Europe"),
-    region_label = fct_rev(region_label)   # EUR on top
-  )
-
-p3 <- ggplot(df_dist,
-             aes(x = pct_ontime, y = region_label,
-                 fill = region, color = region)) +
-  # Boxplot interior
-  geom_boxplot(aes(group = interaction(region, year)),
+# ── P3: Distribution ──────────────────────────────────────────────────────────
+p3 <- ggplot(df_airport,
+             aes(x = PCT_ONTIME, y = REGION,
+                 fill = REGION, color = REGION)) +
+  geom_boxplot(aes(group = interaction(REGION, YEAR)),
                position = position_dodge(width = 0.55),
                width = 0.35, alpha = 0.25,
                outlier.shape = NA, linewidth = 0.5) +
-  # Jitter points coloured by year
-  geom_jitter(aes(shape = year, group = interaction(region, year)),
+  geom_jitter(aes(shape = YEAR, group = interaction(REGION, YEAR)),
               position = position_jitterdodge(jitter.width = 0.15,
-                                             dodge.width = 0.55),
+                                              dodge.width = 0.55),
               size = 2.2, alpha = 0.8) +
-  geom_vline(xintercept = THRESHOLD, linetype = "dashed",
-             color = "#cc3333", linewidth = 0.5, alpha = 0.7) +
-  annotate("text", x = THRESHOLD + 0.4, y = 2.48, label = "80% target",
-           color = "#cc3333", size = 2.8, hjust = 0, fontface = "italic") +
   scale_fill_manual(values  = pal_region, guide = "none") +
   scale_color_manual(values = pal_region, guide = "none") +
   scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
-  scale_x_continuous(limits = c(58, 97),
-                     labels = label_number(suffix = "%")) +
+  scale_x_continuous(limits = c(50, 70),
+                     labels = scales::label_number(suffix = "%")) +
+  scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
   labs(
     title    = "③ Distribution — Spread & Tails Across Airports",
     subtitle = "Box: IQR · Points: individual airports · ○ 2023 ● 2024",
     x = "% On-Time Arrivals (airport level)", y = NULL
   ) +
-  theme_day07() +
-  theme(
-    panel.grid.major.y = element_blank(),
-    axis.text.y = element_text(size = 11)
-  )
+  theme_day07()
 
-# =============================================================================
-# COMPOSE – patchwork
-# =============================================================================
-
+# ── Composição final ──────────────────────────────────────────────────────────
 final_plot <- (p1 / p2 / p3) +
   plot_annotation(
     title    = "BRA–EUR Punctuality: A Multiscale View  |  2023–2024",
     subtitle = paste0(
-      "Same KPI · Three levels of zoom — Network → Airport → Distribution\n"),
-    caption  = "Day 07 · #30DayChartChallenge · Theme: Multi-scale",
+      "Same KPI · Three levels of zoom — Network → Airport → Distribution\n"
+    ),
+    caption  = "Day 07 · #30DayChartChallenge · Theme: Distributions",
     theme = theme(
-      plot.title    = element_text(size = 15, face = "bold", color = "#1a1a2e",
-                                   margin = margin(b = 4)),
-      plot.subtitle = element_text(size = 9,  color = "#666688",
-                                   margin = margin(b = 10)),
+      plot.title    = element_text(size = 15, face = "bold", color = "#1a1a2e"),
+      plot.subtitle = element_text(size = 9,  color = "#666688"),
       plot.caption  = element_text(size = 8,  color = "#999999", hjust = 1),
       plot.background = element_rect(fill = "#fafafa", color = NA)
     )
