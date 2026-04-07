@@ -1,0 +1,126 @@
+---
+title: "Day07 - multi-scale"
+format: html
+---
+
+This is to download the 2023 data from the github repo.
+
+Note: removed {r} to deactivate the following, but keep the code for reference.
+
+```{}
+bra_punc_url <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/refs/heads/main/data/BRA-punc.csv"
+
+study_years <- 2023
+
+bra_punc <- readr::read_csv(bra_punc_url, show_col_types = FALSE) |> 
+# correct (minimal impact) renamed colums
+  dplyr::rename("(-20,-15]" = "(-20,-16]","(-15,-10]" = "(-16,-10]") |> 
+  dplyr::filter(lubridate::year(DATE) %in% study_years)
+
+out_name <- paste0("./data/BRA-punc-", study_years, ".csv")
+#bra_punc |> readr::write_csv(out_name)
+
+# European data
+# ----- note: there is a separate file for LPPT as we changed airports in 2025
+
+
+#url_2024 <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-2024.csv"
+url_2023 <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-2023.csv"
+url_lppt <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-LPPT-2019-2024.csv"
+
+eur_punc      <- readr::read_csv(url_2023, show_col_types = FALSE)
+eur_punc_lppt <- readr::read_csv(url_lppt, show_col_types = FALSE)
+
+eur_punc <- eur_punc |> dplyr::bind_rows(eur_punc_lppt) |> 
+  dplyr::filter(lubridate::year(DATE) == study_years) |> 
+  # trim to 10 comparison airports of last year
+  dplyr::filter(! ICAO %in% c("LIRF","LTFM","LEPA","EFHK"))
+
+out_name <- paste0("./data/EUR-punc-", study_years, ".csv")
+eur_punc |> dplyr::rename(APT = ICAO) |> readr::write_csv(out_name)
+```
+
+# Data 
+
+* go to data folder and check for files with PUNC
+* loop over the list and read all in
+
+```{r}
+# load data
+punc <- fs::dir_ls("data", regexp = "-punc-202[3|4]") |> 
+  purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |> 
+  dplyr::bind_rows() |> 
+  #-------- add region label -------------
+  dplyr::mutate(REGION = case_when(
+   grepl("^S", APT)   ~ "BRA"
+  ,grepl("^E|L", APT) ~ "EUR"
+  ,.default = NA
+))
+
+# check what we have
+punc
+```
+
+The data has both arrival and departure punctuality in the given slots!
+
+If you wanto to work with the arrival punctuality:
+
+arr_punc <- punc |> dplyr::filter(PHASE == "ARR")
+
+```{r}
+# dependent on aggregation level 
+punc_annual <- punc |> 
+  # set the grouping of aggregation
+  # here we have per airport, per phase (if not filtered before), for each YEAR, each REGION
+  group_by(APT, PHASE, YEAR = lubridate::year(DATE), REGION) |> 
+  reframe(across(.cols = `(-INF,-60]`:`[60,INF)`, .fns = sum))
+
+punc_annual
+```
+
+```{r}
+# helper function to add the delay groupings in PBWG convention
+add_dly_early_late_groupings <- function(.punc_df){
+  df <- .punc_df |>  
+    dplyr::mutate(
+      EARLY        = rowSums(across(.cols = `(-INF,-60]`:`(-20,-15]`), na.rm = TRUE)
+      ,EARLY_M15M05 = (`(-15,-10]` + `(-10,-5]`)
+      ,EARLY_M05M00 =  `(-5,0]`                 
+      ,LATE_P00P05  =  `(0,5)`                   
+      ,LATE_P05P15  = (`[5,10)` + `[10,15)`)     
+      ,LATE         = rowSums(across(.cols = `[15,20)`:`[60,INF)`), na.rm = TRUE) 
+      ,WITHIN_M05P05= (`(-5,0]` + `(0,5)`)
+      ,WITHIN_M15P15= (`(-15,-10]`+`(-10,-5]`+`(-5,0]`+`(0,5)`+`[5,10)`+`[10,15)`)
+    )
+}
+
+# to calculate the N_VALID we sum over all countes
+add_N_VALID <- function(.punc_df_with_groupings){
+  df <- .punc_df_with_groupings |> 
+    dplyr::mutate(N_VALID = rowSums(across(EARLY:LATE)))
+  df
+}
+
+# ========== example
+piep <- punc_annual |> 
+  add_dly_early_late_groupings() |> 
+  add_N_VALID()
+
+piep |> dplyr::glimpse()
+```
+
+```{r}
+punctuality_as_percentage <- function(df_with_punc_and_groups){
+  df <- df_with_punc_and_groups |> 
+    dplyr::mutate(dplyr::across(.cols = EARLY:WITHIN_M15P15, .fns = ~ .x / N_VALID))
+  df
+}
+
+piep <- punc_annual |> 
+  add_dly_early_late_groupings() |> 
+  add_N_VALID() |> 
+  punctuality_as_percentage()
+
+piep |> dplyr::glimpse()
+```
+
