@@ -134,6 +134,17 @@ aptview <- piep |>
      mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
      select(PHASE , WITHIN_M15P15 ,YEAR , REGION , APT) |> print()
 
+netview <- piep |>
+     group_by(PHASE , YEAR , REGION) |>
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
+     ) |>
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15 ,YEAR , REGION) |> print()
+
+
 ```
 
 
@@ -196,53 +207,15 @@ scopetable <- bind_rows(
     )
 )
 
-# ── Dados fictícios por aeroporto ─────────────────────────────────────────────
-bra_airports <- scopetable |>
-  filter(REGION == "BRA") |>
-  mutate(
-    BASE_ONTIME = c(75, 80, 74, 71, 76, 73, 74, 78, 72, 80, 71, 73),
-    BASE_DELAY  = c(17, 14, 18, 22, 16, 19, 18, 15, 19, 14, 20, 18)
-  )
-
-eur_airports <- scopetable |>
-  filter(REGION == "EUR") |>
-  mutate(
-    BASE_ONTIME = c(86, 82, 80, 85, 88, 83, 84, 87, 88, 89, 82, 83),
-    BASE_DELAY  = c( 7,  9, 11,  8,  6, 10,  9,  7,  6,  5,  9,  8)
-  )
-
-# ── Gera variação anual ───────────────────────────────────────────────────────
-make_yearly <- function(df, yr, noise_sd_ot = 2.5, noise_sd_dl = 1.8) {
-  df |>
-    mutate(
-      YEAR       = factor(yr),
-      PCT_ONTIME = pmax(55, pmin(97,
-                     BASE_ONTIME + rnorm(n(), mean = ifelse(yr == 2024, 1.5, 0),
-                                        sd = noise_sd_ot))),
-      AVG_DELAY  = pmax(3,
-                     BASE_DELAY  + rnorm(n(), mean = ifelse(yr == 2024, -0.8, 0),
-                                        sd = noise_sd_dl))
-    ) |>
-    select(-BASE_ONTIME, -BASE_DELAY)
-}
-
-set.seed(42)
-df_airport <- bind_rows(
-  make_yearly(bra_airports, 2023),
-  make_yearly(bra_airports, 2024),
-  make_yearly(eur_airports, 2023),
-  make_yearly(eur_airports, 2024)
-)
 
 # ── Network aggregates ────────────────────────────────────────────────────────
-df_network <- tribble(
-  ~REGION, ~YEAR, ~PCT_ONTIME, ~AVG_DELAY,
-  "BRA",   2023,   65.0,        18.3,
-  "BRA",   2024,   61.8,        16.7,
-  "EUR",   2023,   56.3,         9.8,
-  "EUR",   2024,   57.1,         9.1
-) |>
-  mutate(YEAR = factor(YEAR))
+df_network <- netview |> 
+  filter(PHASE == "ARR") |>
+  mutate(
+    PCT_ONTIME = WITHIN_M15P15 * 100,
+    YEAR       = factor(YEAR)
+  ) |>
+  select(REGION, YEAR, PCT_ONTIME)
 
 theme_day07 <- function(base_size = 11) {
   theme_minimal(base_size = base_size) +
@@ -275,8 +248,8 @@ p1 <- ggplot(df_network,
     nudge_y    = 0.25,
     size       = 3.2,
     fontface   = "bold",
-    direction  = "x",       # ← só repele no eixo x
-    segment.color = NA      # ← sem linha de conexão
+    direction  = "x",      
+    segment.color = NA      
   ) +
   scale_color_manual(values = pal_region, guide = "none") +
   scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
@@ -286,7 +259,7 @@ p1 <- ggplot(df_network,
   ) +
   scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
   labs(
-    title    = "① Network — Headline Punctuality",
+    title    = "① Network — Arrival Punctuality" ,
     subtitle = "Network-wide % on-time arrivals · 2023 vs 2024",
     x = "% On-Time Arrivals", y = NULL
   ) +
@@ -338,7 +311,7 @@ p2 <- ggplot(df_airport_wide, aes(y = AIRPORT_FCT)) +
   scale_x_continuous(limits = c(40, 80),
                      labels = scales::label_number(suffix = "%")) +
   labs(
-    title    = "② Airport — Where Does the Gap Live?",
+    title    = "② Airport View" ,
     subtitle = "Each airport: ○ 2023 → ● 2024",
     x = "% On-Time Arrivals", y = NULL
   ) +
@@ -377,7 +350,7 @@ final_plot <- (p1 / p2 / p3) +
     subtitle = paste0(
       "Same KPI · Three levels of zoom — Network → Airport → Distribution\n"
     ),
-    caption  = "Day 07 · #30DayChartChallenge · Theme: Distributions",
+    caption  = "Day 07 · #30DayChartChallenge · DECEA Performance Section & EUROCONTROL PRU",
     theme = theme(
       plot.title    = element_text(size = 15, face = "bold", color = "#1a1a2e"),
       plot.subtitle = element_text(size = 9,  color = "#666688"),
