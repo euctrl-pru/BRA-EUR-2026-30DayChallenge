@@ -73,35 +73,44 @@ library(ggplot2)
 
 
 ```{r}
-daily_punc |> dplyr::filter(PHASE == "ARR") |> 
-  ggplot(aes(x = PUNC, colour = REGION, weight = N_VALID)) +
+daily_punc |> # dplyr::filter(PHASE == "ARR") |> 
+  ggplot(aes(x = PUNC, colour = PHASE, weight = N_VALID)) +
   geom_density(adjust = 1) +
   facet_wrap(~ APT, scales = "free_y")
 ```
 
+## using ggridge
 
-
-library(ggplot2)
+```{r}
 library(ggridges)
 
-ggplot(df, aes(x = kpi, y = airport, fill = region, weight = movements)) +
-  geom_density_ridges(alpha = 0.6, scale = 1) 
-  
-  
- ggplot(df, aes(x = kpi, y = airport, weight = movements)) +
-  geom_density_ridges(scale = 1) +
-  facet_wrap(~ region)
-  
-  
----------
+daily_punc |> 
+ggplot(aes(x = PUNC, y = APT, fill = PHASE, weight = N_VALID)) +
+  geom_density_ridges(alpha = 0.6, scale = 1) +
+  facet_wrap(~ REGION, scale = "free_y")
+```  
 
-library(ggplot2)
+```{r}
+daily_punc |>   
+ ggplot(aes(x = PUNC, y = APT, fill = PHASE, weight = N_VALID)) +
+  geom_density_ridges(scale = 1) +
+  facet_wrap(~ REGION, scale = "free_y")
+```
+
+## using ggdist
+
+```{r}
 library(ggdist)
 
-ggplot(df, aes(y = airport, x = kpi)) +
+daily_punc |> 
+ggplot(aes(y = APT, x = PUNC, fill = PHASE)) +
   ggdist::stat_halfeye() +
-  facet_wrap(~ region)
-  
-ggplot(df, aes(y = airport, x = kpi, fill = region)) +
-  ggdist::stat_halfeye(alpha = 0.6, position = "identity")
-  
+  facet_wrap(~ REGION, scale = "free_y")
+```
+
+```{r}
+daily_punc |> 
+ggplot(aes(y = APT, x = PUNC, fill = PHASE)) +
+  ggdist::stat_halfeye(alpha = 0.6, position = "identity") +
+  facet_wrap(~REGION, scale = "free_y")
+```
