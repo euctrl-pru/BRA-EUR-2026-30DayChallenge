@@ -263,7 +263,7 @@ p1 <- ggplot(df_network,
     subtitle = "Network-wide % on-time arrivals · 2023 vs 2024",
     x = "% On-Time Arrivals", y = NULL
   ) +
-  theme_day07()
+  theme_day07() 
 
 # ── P2: Airport slope ─────────────────────────────────────────────────────────
 
@@ -321,23 +321,28 @@ p2 <- ggplot(df_airport_wide, aes(y = AIRPORT_FCT)) +
 # ── P3: Distribution ──────────────────────────────────────────────────────────
 p3 <- ggplot(df_airport,
              aes(x = PCT_ONTIME, y = REGION,
-                 fill = REGION, color = REGION)) +
-  geom_boxplot(aes(group = interaction(REGION, YEAR)),
-               position = position_dodge(width = 0.55),
-               width = 0.35, alpha = 0.25,
-               outlier.shape = NA, linewidth = 0.5) +
-  geom_jitter(aes(shape = YEAR, group = interaction(REGION, YEAR)),
-              position = position_jitterdodge(jitter.width = 0.15,
-                                              dodge.width = 0.55),
-              size = 2.2, alpha = 0.8) +
-  scale_fill_manual(values  = pal_region, guide = "none") +
-  scale_color_manual(values = pal_region, guide = "none") +
+                 group = interaction(REGION, YEAR),
+                 color = REGION, fill = REGION)) +
+  geom_boxplot(
+    position   = position_dodge(width = 0.6),
+    width      = 0.35, alpha = 0.15,
+    outlier.shape = NA, linewidth = 0.6
+  ) +
+  geom_point(
+    aes(shape = YEAR,
+        alpha = YEAR),
+    position = position_dodge(width = 0.6),
+    size = 2.5, stroke = 1.2,
+    fill = "white"
+  ) +
   scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
-  scale_x_continuous(limits = c(50, 70),
-                     labels = scales::label_number(suffix = "%")) +
+  scale_alpha_manual(values = c("2023" = 0.4, "2024" = 1.0), guide = "none") +
+  scale_color_manual(values = pal_region, guide = "none") +
+  scale_fill_manual(values  = pal_region, guide = "none") +
+  scale_x_continuous(labels = scales::label_number(suffix = "%")) +
   scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
   labs(
-    title    = "③ Distribution — Spread & Tails Across Airports",
+    title    = "③ Distribution — Across Airports",
     subtitle = "Box: IQR · Points: individual airports · ○ 2023 ● 2024",
     x = "% On-Time Arrivals (airport level)", y = NULL
   ) +
@@ -358,7 +363,7 @@ final_plot <- (p1 / p2 / p3) +
       plot.background = element_rect(fill = "#fafafa", color = NA)
     )
   ) +
-  plot_layout(heights = c(1, 2.2, 1.4), guides = "collect") &
+  plot_layout(heights = c(1, 2.2, 1.4)) &
   theme(legend.position = "bottom")
 
 
