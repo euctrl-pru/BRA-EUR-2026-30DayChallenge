@@ -8,3 +8,5 @@ data-src/
 
 # kill obsolete files
 xx-Day02.qmd
+xx-D*
+xx-rwb*
