@@ -1,0 +1,118 @@
+---
+title: "Day 08 - circular"
+format: html
+---
+
+Circular “route wheel” for international flows
+•	What it could show: distribution of international traffic flows to/from Brazil vs Europe by world region, arranged around a circle.
+•	Data to tap: OD or entry/exit region mapping; aggregate by destination region and weight by flights/ASK.
+•	Discussion hook: link traffic structure to performance (do long-haul shares correlate with punctuality tails?).
+•	ggplot2 angle: chord-like effect using ggforce::geom_arc_bar / geom_bezier; more experimental.
+
+```{r}
+
+# get is from local file - only works on RQ's comp
+path_one_up <- here::here() |> dirname()
+path_nm_flt <- here::here(path_one_up, "__DATA","NM-flight-table")
+
+nm_flt_2025 <- "NM-flt-2025.zip"
+
+nm_flt <- read_zip_content(path_nm_flt, nm_flt_2025) |> 
+  dplyr::bind_rows()
+```
+
+```{r}
+# study airports
+bra_apts <- c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG")
+eur_apts <- c("EGLL","EGKK","EHAM","EDDF","EDDM","LSZH","LFPG","LEMD","LEBL","LPPT","LTFM","LGAV")
+```
+
+```{r}
+conns <- nm_flt |> 
+    dplyr::group_by(ADEP, ADES) |> 
+    dplyr::reframe(DEPS = n()) |> 
+    dplyr::mutate(
+        ADEP_REG = dplyr::case_when(
+             ADEP == "AFIL"  ~ "EUR"    # air filed FPLs only regional
+            ,grepl(pattern = "^[E|L|BI]", ADEP) ~ "EUR"
+            ,grepl(pattern = "^S[B|D|I|J|N|S|W]", ADEP) ~ "BRA"
+            , .default = "INTNL"
+            )
+        ,ADES_REG = dplyr::case_when(
+             grepl(pattern = "^[E|L|BI]", ADES)         ~ "EUR"
+            ,grepl(pattern = "^S[B|D|I|J|N|S|W]", ADES) ~ "BRA"
+            , .default = "INTNL"
+        )
+    )
+
+conns |> group_by(ADEP_REG, ADES_REG) |> reframe(COMBOS = dplyr::n(), DEPS = sum(DEPS))
+```
+
+```{r}
+eur_bra <- conns |> 
+  dplyr::filter(ADEP_REG == "EUR", ADES_REG == "BRA") 
+eur_bra <- eur_bra |> 
+  dplyr::mutate(
+      ADEP_STUDY = ifelse(ADEP %in% eur_apts, ADEP, "OTHER_EUR")
+    , ADES_STUDY = ifelse(ADES %in% bra_apts, ADES, "OTHER_BRA")
+    ) |> 
+  dplyr::group_by(ADEP_STUDY, ADES_STUDY) |> 
+  dplyr::reframe(DEPS = sum(DEPS))
+
+eur_bra |> readr::write_csv("./data/BRA-EUR-aerodrome-pair-connections.csv")
+
+eur_bra
+```
+
+```{r}
+eur_order <- c(eur_apts, "OTHER_EUR")
+bra_order <- c(bra_apts, "OTHER_BRA")
+
+sector_order <- c(eur_order, bra_order)
+```
+
+```{r}
+library(circlize)
+
+wheel_data <- eur_bra |> 
+  dplyr::rename(ADEP_GRP = ADEP_STUDY, ADES_GRP=ADES_STUDY, FLTS = DEPS)
+
+circos.clear()
+
+circos.par(
+  start.degree = 90,
+  gap.after = c(rep(2, length(eur_order) - 1), 10,
+                rep(2, length(bra_order) - 1), 10)
+)
+
+chordDiagram(
+  x = wheel_data,
+  order = sector_order,
+  grid.col = c(
+    setNames(rep("#4472C4", length(eur_order)), eur_order),
+    setNames(rep("#2E6B3E", length(bra_order)), bra_order)
+  ),
+  transparency = 0.5,
+  annotationTrack = "grid",
+  preAllocateTracks = 1
+)
+
+circos.trackPlotRegion(
+  track.index = 1,
+  panel.fun = function(x, y) {
+    sector.name <- get.cell.meta.data("sector.index")
+    circos.text(
+      x = get.cell.meta.data("xcenter"),
+      y = get.cell.meta.data("ylim")[1],
+      labels = sector.name,
+      facing = "clockwise",
+      niceFacing = TRUE,
+      adj = c(0, 0.5),
+      cex = 0.6
+    )
+  },
+  bg.border = NA
+)
+
+```
+

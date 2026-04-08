@@ -1,38 +1,85 @@
 ---
-title: "Day 07 - multi-scale"
+title: "Day07 - multi-scale"
 format: html
 ---
 
-```{r}
-ggplot2::theme_set(ggplot2::theme_minimal())
+This is to download the 2023 data from the github repo.
+
+Note: removed {r} to deactivate the following, but keep the code for reference.
+
+```{}
+bra_punc_url <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/refs/heads/main/data/BRA-punc.csv"
+
+study_years <- 2023
+
+bra_punc <- readr::read_csv(bra_punc_url, show_col_types = FALSE) |> 
+# correct (minimal impact) renamed colums
+  dplyr::rename("(-20,-15]" = "(-20,-16]","(-15,-10]" = "(-16,-10]") |> 
+  dplyr::filter(lubridate::year(DATE) %in% study_years)
+
+out_name <- paste0("./data/BRA-punc-", study_years, ".csv")
+#bra_punc |> readr::write_csv(out_name)
+
+# European data
+# ----- note: there is a separate file for LPPT as we changed airports in 2025
+
+
+#url_2024 <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-2024.csv"
+url_2023 <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-2023.csv"
+url_lppt <- "https://raw.githubusercontent.com/euctrl-pru/international-BRA-EUR-2025/main/data/PBWG-EUR-PUNC-LPPT-2019-2024.csv"
+
+eur_punc      <- readr::read_csv(url_2023, show_col_types = FALSE)
+eur_punc_lppt <- readr::read_csv(url_lppt, show_col_types = FALSE)
+
+eur_punc <- eur_punc |> dplyr::bind_rows(eur_punc_lppt) |> 
+  dplyr::filter(lubridate::year(DATE) == study_years) |> 
+  # trim to 10 comparison airports of last year
+  dplyr::filter(! ICAO %in% c("LIRF","LTFM","LEPA","EFHK"))
+
+out_name <- paste0("./data/EUR-punc-", study_years, ".csv")
+eur_punc |> dplyr::rename(APT = ICAO) |> readr::write_csv(out_name)
 ```
 
+# Data 
 
-## Idea
-
-show distribution per region --> scale ~ variation, scale ~ region
-
-work with a subset of the KPIs (default to traffic and punctuality)
-
-## distribution ~ ridgeline
-
-### data preparation
+* go to data folder and check for files with PUNC
+* loop over the list and read all in
 
 ```{r}
 # load data
-punc <- fs::dir_ls("data", regexp = "-punc-2024") |> 
+punc <- fs::dir_ls("data", regexp = "-punc-202[3|4]") |> 
   purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |> 
-  dplyr::bind_rows()
-
-# label regions
-punc <- punc |> mutate(REGION = case_when(
+  dplyr::bind_rows() |> 
+  #-------- add region label -------------
+  dplyr::mutate(REGION = case_when(
    grepl("^S", APT)   ~ "BRA"
   ,grepl("^E|L", APT) ~ "EUR"
   ,.default = NA
 ))
 
+# check what we have
+punc
+```
 
-# helper functions to aggregate the data
+The data has both arrival and departure punctuality in the given slots!
+
+If you wanto to work with the arrival punctuality:
+
+arr_punc <- punc |> dplyr::filter(PHASE == "ARR")
+
+```{r}
+# dependent on aggregation level 
+punc_annual <- punc |> 
+  # set the grouping of aggregation
+  # here we have per airport, per phase (if not filtered before), for each YEAR, each REGION
+  group_by(APT, PHASE, YEAR = lubridate::year(DATE), REGION) |> 
+  reframe(across(.cols = `(-INF,-60]`:`[60,INF)`, .fns = sum))
+
+punc_annual
+```
+
+```{r}
+# helper function to add the delay groupings in PBWG convention
 add_dly_early_late_groupings <- function(.punc_df){
   df <- .punc_df |>  
     dplyr::mutate(
@@ -47,714 +94,290 @@ add_dly_early_late_groupings <- function(.punc_df){
     )
 }
 
-daily_punc <- punc |> 
+# to calculate the N_VALID we sum over all countes
+add_N_VALID <- function(.punc_df_with_groupings){
+  df <- .punc_df_with_groupings |> 
+    dplyr::mutate(N_VALID = rowSums(across(EARLY:LATE)))
+  df
+}
+
+# ========== example
+piep <- punc_annual |> 
   add_dly_early_late_groupings() |> 
-  dplyr::select(APT, DATE, PHASE, REGION, EARLY:LATE) |> 
-  dplyr::group_by(REGION, APT, DATE, PHASE) |> 
-  dplyr::mutate(N_VALID = rowSums(dplyr::across(EARLY:LATE)))  |> 
-  dplyr::ungroup()
+  add_N_VALID()
 
-daily_punc <- daily_punc |> 
-  dplyr::mutate(PUNC = rowSums(dplyr::across(EARLY_M15M05:LATE_P05P15)) / N_VALID)
-```
-
-
-df  # one row per airport per time-unit (day/week/year)
-# region   : "BRA" / "EUR"
-# airport  : airport code (ICAO)
-# period   : Date (daily), or week start date, or year (numeric)
-# kpi      : numeric value (e.g., arrival punctuality % or delay minutes)
-# movements: optional numeric weights (e.g., flights)
-
-
-
-
-### exploratory graph - ridgeline
-
-```{r}
-library(ggplot2)
-```
-
-
-
-```{r}
-daily_punc |> # dplyr::filter(PHASE == "ARR") |> 
-  ggplot(aes(x = PUNC, colour = PHASE, weight = N_VALID)) +
-  geom_density(adjust = 1) +
-  facet_wrap(~ APT, scales = "free_y")
-```
-
-## using ggridge
-
-```{r}
-library(ggridges)
-
-daily_punc |> 
-ggplot(aes(x = PUNC, y = APT, fill = PHASE, weight = N_VALID)) +
-  geom_density_ridges(alpha = 0.6, scale = 1) +
-  facet_wrap(~ REGION, scale = "free_y")
-```  
-
-```{r}
-punc_med <- daily_punc |> 
-  group_by(REGION, APT, PHASE)  |> 
-  reframe(P50 = median(PUNC, na.rm = TRUE)) |> 
-group_by(REGION) |>
-  mutate(
-    y = as.numeric(factor(APT)),
-    y0 = y - 0.18,
-    y1 = y + 0.9
-  ) |> 
-  ungroup()
-
-
-p <- daily_punc |>   
- ggplot(aes(x = PUNC, y = APT, fill = PHASE)) +
-  geom_density_ridges(aes(weight = N_VALID), scale = 1) +
-  facet_wrap(~ REGION, scales = "free_y")
-
-p
+piep |> dplyr::glimpse()
 ```
 
 ```{r}
-# started with plotting a point for the 50th percentile
-p + 
-  geom_point(data = punc_med, aes(x = P50, y = APT, color = PHASE))
+punctuality_as_percentage <- function(df_with_punc_and_groups){
+  df <- df_with_punc_and_groups |> 
+    dplyr::mutate(dplyr::across(.cols = EARLY:WITHIN_M15P15, .fns = ~ .x / N_VALID))
+  df
+}
 
-# vline is global
-# thus draw a "segment"
-p +
-  geom_segment(
-    data = punc_med, 
-    aes(x = P50, xend = P50, y = y0, yend = y1, color = PHASE))
+piep <- punc_annual |> 
+  add_dly_early_late_groupings() |> 
+  add_N_VALID() |> 
+  punctuality_as_percentage()
+
+piep |> dplyr::glimpse()
+
+
+aptview <- piep |>
+     group_by(PHASE , YEAR , REGION , APT) |>
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
+     ) |>
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15 ,YEAR , REGION , APT) |> print()
+
+netview <- piep |>
+     group_by(PHASE , YEAR , REGION) |>
+     reframe(CHECK = n()
+             , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
+     ) |>
+     add_dly_early_late_groupings2() |>
+     mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
+     mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
+     select(PHASE , WITHIN_M15P15 ,YEAR , REGION) |> print()
+
+
 ```
 
 
-```{r}
-p <- daily_punc |>   
- ggplot(aes(x = PUNC, y = APT, fill = PHASE)) +
-  geom_density_ridges(
-  alpha = 0.6, scale = 1, rel_min_height = 0.01,
-  quantile_lines = TRUE,
-  quantiles = 0.5
-)
-
-p + 
-  facet_wrap(~ REGION, scale = "free_y")
-```
-
-
-## using ggdist
-
-```{r}
-library(ggdist)
-
-daily_punc |> 
-ggplot(aes(y = APT, x = PUNC, fill = PHASE)) +
-  ggdist::stat_halfeye() +
-  facet_wrap(~ REGION, scale = "free_y")
-```
-
-```{r}
-daily_punc |> 
-ggplot(aes(y = APT, x = PUNC, fill = PHASE)) +
-  ggdist::stat_halfeye(alpha = 0.6, position = "identity") +
-  facet_wrap(~REGION, scale = "free_y")
-```
+### Bene ggplot ###
 
 
 ```{r}
 
-```
+library(tidyverse)
+library(patchwork)
+library(scales)
 
-```{r}
-airports <- tibble::tribble(
-  ~REGION, ~APT,  ~lon,   ~lat,
-  "BRA", "SBSV", -38.33, -12.91,
-  "BRA", "SBSP", -46.66, -23.63,
-  "BRA", "SBRJ", -43.17, -22.81,
-  "BRA", "SBPA", -51.17, -29.99,
-  "BRA", "SBKP", -47.14, -23.01,
-  "BRA", "SBGR", -46.47, -23.43,
-  "BRA", "SBGL", -43.24, -22.81,
-  "BRA", "SBCT", -49.17, -25.53,
-  "BRA", "SBCF", -43.97, -19.63,
-  "BRA", "SBBR", -47.92, -15.87,
-  "EUR", "LSZH",   8.55,  47.46,
-  "EUR", "LPPT",  -9.13,  38.77,
-  "EUR", "LFPG",   2.55,  49.01,
-  "EUR", "LEMD",  -3.56,  40.47,
-  "EUR", "LEBL",   2.08,  41.30,
-  "EUR", "EHAM",   4.76,  52.31,
-  "EUR", "EGLL",  -0.45,  51.47,
-  "EUR", "EGKK",  -0.19,  51.15,
-  "EUR", "EDDM",  11.79,  48.35,
-  "EUR", "EDDF",   8.57,  50.05
+# ── Colour palette & shared theme ────────────────────────────────────────────
+pal_region  <- c("BRA" = "#009C3B", "EUR" = "#2B4EAE")
+pal_year    <- c("2023" = "#888888", "2024" = "#111111")
+THRESHOLD   <- 80   # % on-time reference line
+
+theme_day07 <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
+    theme(
+      text                = element_text(family = "sans", color = "#1a1a2e"),
+      plot.title          = element_text(size = rel(1.05), face = "bold",
+                                         margin = margin(b = 4)),
+      plot.subtitle       = element_text(size = rel(0.82), color = "#555577",
+                                         margin = margin(b = 8)),
+      axis.text           = element_text(size = rel(0.82)),
+      axis.title          = element_text(size = rel(0.85)),
+      panel.grid.minor    = element_blank(),
+      panel.grid.major.y  = element_line(color = "#e8e8f0", linewidth = 0.4),
+      panel.grid.major.x  = element_line(color = "#e8e8f0", linewidth = 0.4),
+      strip.text          = element_text(face = "bold", size = rel(0.88),
+                                         color = "#1a1a2e"),
+      strip.background    = element_rect(fill = "#f0f0f8", color = NA),
+      legend.position     = "bottom",
+      legend.title        = element_text(size = rel(0.82), face = "bold"),
+      legend.text         = element_text(size = rel(0.80)),
+      plot.background     = element_rect(fill = "#fafafa", color = NA),
+      panel.background    = element_rect(fill = "#fafafa", color = NA)
+    )
+}
+
+
+# ── Level 2: Airport-level summary ───────────────────────────────────────────
+set.seed(42)
+
+scopetable_raw <- readr::read_csv(here::here("data", "study_airports_BRA_EUR.csv"))
+
+scopetable <- bind_rows(
+  scopetable_raw |>
+    transmute(
+      REGION       = "BRA",
+      AIRPORT_NAME = str_remove(Brazil, "\\s*\\(\\w+\\)$") |> str_trim(),
+      AIRPORT_ICAO = str_extract(Brazil, "(?<=\\()\\w+(?=\\))")
+    ),
+  scopetable_raw |>
+    transmute(
+      REGION       = "EUR",
+      AIRPORT_NAME = str_remove(Europe, "\\s*\\(\\w+\\)$") |> str_trim(),
+      AIRPORT_ICAO = str_extract(Europe, "(?<=\\()\\w+(?=\\))")
+    )
 )
 
 
-map_kpi <- daily_punc |>
+# ── Network aggregates ────────────────────────────────────────────────────────
+df_network <- netview |> 
   filter(PHASE == "ARR") |>
-  group_by(REGION, APT) |>
-  summarise(P50_ARR = median(PUNC, na.rm = TRUE), .groups = "drop")
+  mutate(
+    PCT_ONTIME = WITHIN_M15P15 * 100,
+    YEAR       = factor(YEAR)
+  ) |>
+  select(REGION, YEAR, PCT_ONTIME)
 
-airports_map <- airports |>
-  left_join(map_kpi, by = c("REGION", "APT"))
-
-p_map <- ggplot(airports_map, aes(lon, lat)) +
-  geom_point(aes(size = P50_ARR), alpha = 0.8) +
-  geom_text(aes(label = APT), nudge_y = 0.8, size = 3) +
-  facet_wrap(~ REGION, scales = "free") 
-#+
-#  coord_equal()
-
-```
-
-
-adding map and ridgelines does not work :( ~no nice story
-
-
-```{r}
-airport_layout <- tibble::tribble(
-  ~APT,   ~row, ~col,
-  # Brazil (north → south)
-  "SBSV",  1,    2,
-  "SBBR",  2,    2,
-  "SBCF",  3,    3,
-  "SBSP",  4,    4,
-  "SBGR",  4,    5,
-  "SBRJ",  5,    5,
-  "SBGL",  5,    6,
-  "SBCT",  6,    4,
-  "SBPA",  7,    4,
-  "SBKP",  4,    6,
-
-  # Europe (west → east, north → south)
-  "LPPT",  2,    1,
-  "LEMD",  3,    2,
-  "LEBL",  3,    3,
-  "LFPG",  2,    4,
-  "EGLL",  2,    5,
-  "EGKK",  3,    5,
-  "EHAM",  1,    4,
-  "EDDF",  1,    5,
-  "EDDM",  2,    6,
-  "LSZH",  3,    6
-)
-
-daily_punc_geo <- daily_punc |>
-  left_join(airport_layout, by = "APT")
-
-```
-
-```{r}
-ggplot(
-  daily_punc_geo,
-  aes(x = PUNC, y = PHASE, fill = PHASE)
-) +
-  geom_density_ridges(scale = 0.9, alpha = 0.7) +
-  facet_grid(row ~ col) + # , labeller = labeller(APT = label_value)) +
-  theme_void()
-```
-
-
-
-```{r}
-library(sf)
-library(ggplot2)
-library(cowplot)
-
-world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
-
-map_bg <- ggplot() +
-  geom_sf(
-    data = world |> dplyr::filter(admin %in% c("Brazil")),
-    fill = "grey95", colour = "grey50"
-  ) +
-  geom_sf(
-    data = world |> dplyr::filter(continent == "Europe"),
-    fill = "grey95", colour = "grey50"
-  ) +
-  coord_sf(xlim = c(-80, 30), ylim = c(-40, 65), expand = FALSE) +
-  theme_void()
-
-```
-
-```{r}
-
-airport_ridge <- function(df) {
-  ggplot(df, aes(x = PUNC, y = PHASE, fill = PHASE)) +
-    geom_density_ridges(scale = 0.9, alpha = 0.7, rel_min_height = 0.01) +
-    theme_void() +
+theme_day07 <- function(base_size = 11) {
+  theme_minimal(base_size = base_size) +
     theme(
-      legend.position = "none",
-      plot.margin = margin(2, 2, 2, 2)
+      plot.title         = element_text(size = rel(1.05), face = "bold",
+                                        margin = margin(b = 4)),
+      plot.subtitle      = element_text(size = rel(0.82), color = "#555577",
+                                        margin = margin(b = 8)),
+      axis.text          = element_text(size = rel(0.82)),
+      axis.title         = element_text(size = rel(0.85)),
+      panel.grid.minor   = element_blank(),
+      panel.grid.major.y = element_line(color = "#e8e8f0", linewidth = 0.4),
+      panel.grid.major.x = element_line(color = "#e8e8f0", linewidth = 0.4),
+      strip.text         = element_text(face = "bold", size = rel(0.88)),
+      strip.background   = element_rect(fill = "#f0f0f8", color = NA),
+      legend.position    = "bottom",
+      plot.background    = element_rect(fill = "#fafafa", color = NA),
+      panel.background   = element_rect(fill = "#fafafa", color = NA)
     )
 }
 
-airport_pos <- tibble::tribble(
-  ~APT,   ~lon,   ~lat,  ~dx,   ~dy,
-  # Brazil
-  "SBGR", -46.47, -23.43,  0,    0,
-  "SBSP", -46.66, -23.63, -1.5, -0.5,
-  "SBRJ", -43.17, -22.81,  0.8,  0,
-  "SBGL", -43.24, -22.81, -0.8, -0.5,
-  "SBSV", -38.33, -12.91,  0,    0,
-  # Europe
-  "EDDF",   8.57,  50.05,  0,    0,
-  "EGLL",  -0.45,  51.47, -1.2,  0,
-  "EHAM",   4.76,  52.31,  0.8,  0.4,
-  "LFPG",   2.55,  49.01,  0,   -0.8,
-  "LSZH",   8.55,  47.46,  0.8, -0.6
-)
-
-```
-
-```{r}
-final_plot <- map_bg
-
-for (apt in airport_pos$APT) {
-
-  ridge_grob <- airport_ridge(
-    daily_punc |> dplyr::filter(APT == apt)
-  ) |> ggplotGrob()
-
-  pos <- airport_pos |> dplyr::filter(APT == apt)
-
-  final_plot <- final_plot +
-    cowplot::draw_plot(
-      ridge_grob,
-      x = scales::rescale(pos$lon + pos$dx, to = c(0, 1), from = c(-80, 30)),
-      y = scales::rescale(pos$lat + pos$dy, to = c(0, 1), from = c(-40, 65)),
-      width = 0.12,
-      height = 0.06
-    )
-}
-
-final_plot
-```
-
-```{r}
-map_br <- ggplot() +
-  geom_sf(
-    data = world |> dplyr::filter(admin == "Brazil"),
-    fill = "grey95", colour = "grey50"
+# ── P1: Network ───────────────────────────────────────────────────────────────
+p1 <- ggplot(df_network,
+             aes(x = PCT_ONTIME, y = REGION,
+                 color = REGION, group = REGION)) +
+  geom_line(color = "#ccccdd", linewidth = 1.8, lineend = "round") +
+  geom_point(aes(shape = YEAR), size = 4) +
+  ggrepel::geom_text_repel(
+    aes(label = sprintf("%.1f%%", PCT_ONTIME)),
+    nudge_y    = 0.25,
+    size       = 3.2,
+    fontface   = "bold",
+    direction  = "x",      
+    segment.color = NA      
   ) +
-  coord_sf(
-    xlim = c(-75, -35),
-    ylim = c(-35,   5),
-    expand = FALSE
+  scale_color_manual(values = pal_region, guide = "none") +
+  scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
+    scale_x_continuous(
+    limits = c(50, 80),                             
+    labels = scales::label_number(suffix = "%")
   ) +
-  theme_void()
-```
-
-```{r}
-airport_ridge <- function(df_airport) {
-  ggplot(df_airport, aes(x = PUNC, y = PHASE, fill = PHASE)) +
-    geom_density_ridges(
-      scale = 0.9,
-      alpha = 0.7,
-      rel_min_height = 0.01
-    ) +
-    theme_void() +
-    theme(
-      legend.position = "none",
-      plot.margin = margin(1, 1, 1, 1)
-    )
-}
-
-
-pos_br <- tibble::tribble(
-  ~APT,   ~lon,   ~lat,  ~dx,   ~dy,
-  "SBGR", -46.47, -23.43,  0,    0,
-  "SBSP", -46.66, -23.63, -1.3, -0.4,
-  "SBRJ", -43.17, -22.81,  0.9,  0,
-  "SBGL", -43.24, -22.81, -0.9, -0.5,
-  "SBSV", -38.33, -12.91,  0,    0,
-  "SBCT", -49.17, -25.53, -0.6, -0.8,
-  "SBPA", -51.17, -29.99,  0,   -0.6,
-  "SBKP", -47.14, -23.01,  1.0, -0.6,
-  "SBCF", -43.97, -19.63,  0.6,  0,
-  "SBBR", -47.92, -15.87,  0,    0
-)
-```
-
-```{r}
-library(cowplot)
-
-panel_br <- map_br
-
-for (apt in pos_br$APT) {
-
-  g <- airport_ridge(
-    daily_punc |> dplyr::filter(APT == apt)
-  ) |> ggplotGrob()
-
-  p <- pos_br |> dplyr::filter(APT == apt)
-
-  panel_br <- panel_br +
-    draw_plot(
-      g,
-      x = scales::rescale(p$lon + p$dx, to = c(0, 1), from = c(-75, -35)),
-      y = scales::rescale(p$lat + p$dy, to = c(0, 1), from = c(-35,   5)),
-      width  = 0.12,
-      height = 0.06
-    )
-}
-```
-
-
-
-
-
-panel_br <- ggdraw(map_br)
-
-for (apt in pos_br$APT) {
-    
-    g <- airport_ridge(
-        daily_punc |> dplyr::filter(APT == apt)
-    ) |> ggplotGrob()
-    
-    p <- pos_br |> dplyr::filter(APT == apt)
-    
-    panel_br <- panel_br +
-        draw_plot(
-            g,
-            x = scales::rescale(p$lon + p$dx, to = c(0, 1), from = c(-75, -35)),
-            y = scales::rescale(p$lat + p$dy, to = c(0, 1), from = c(-35,   5)),
-            width  = 0.12,
-            height = 0.06
-        )
-}
-
-panel_br
-
-
-
-
-
-library(ggplot2)
-library(sf)
-
-p_base <- ggplot() +
-  geom_sf(
-    data = world |> dplyr::filter(admin == "Brazil"),
-    fill = "grey95",
-    colour = "grey60"
-  ) +
-  coord_sf(
-    xlim = c(-75, -35),
-    ylim = c(-35, 5),
-    expand = FALSE
-  ) +
-  theme_void()
-
-library(ggridges)
-library(grid)
-
-ridge_fun <- function(df_airport) {
-  ggplot(df_airport, aes(x = PUNC, y = PHASE, fill = PHASE)) +
-    geom_density_ridges(
-      scale = 0.9,
-      alpha = 0.7,
-      rel_min_height = 0.01
-    ) +
-    theme_void() +
-    theme(legend.position = "none")
-}
-
-g_sbgr <- ridge_fun(daily_punc |> dplyr::filter(APT == "SBGR")) |>
-  ggplotGrob()
-  
-p_br <- p_base +
-  annotation_custom(
-    grob = g_sbgr,
-    xmin = -48.5, xmax = -44.5,   # manually chosen
-    ymin = -26.5, ymax = -22.5
-  )
-
-
-p_br <- p_br +
-  geom_point(
-    data = tibble(lon = -46.47, lat = -23.43),
-    aes(lon, lat),
-    size = 2
-  ) +
-  geom_segment(
-    aes(
-      x = -46.47, y = -23.43,
-      xend = -44.5, yend = -24.5
-    ),
-    linewidth = 0.3,
-    colour = "grey40"
-  )
-
-
-layout_br <- tibble::tribble(
-  ~APT,   ~xmin,  ~xmax,  ~ymin,  ~ymax,
-  "SBGR", -48.5,  -44.5,  -26.5,  -22.5,
-  "SBRJ", -45.0,  -41.0,  -24.5,  -20.5,
-  "SBSV", -40.5,  -36.5,  -15.0,  -11.0
-)
-
-for (i in seq_len(nrow(layout_br))) {
-  row <- layout_br[i, ]
-
-  g <- ridge_fun(
-    daily_punc |> dplyr::filter(APT == row$APT)
-  ) |> ggplotGrob()
-
-  p_br <- p_br +
-    annotation_custom(
-      grob = g,
-      xmin = row$xmin, xmax = row$xmax,
-      ymin = row$ymin, ymax = row$ymax
-    )
-}
- 
-
-library(ggtext)
-
-p_br +
+  scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
   labs(
-    title = "**Daily airport punctuality distributions – Brazil (2024)**",
-    subtitle = "Arrival and departure OTP15 shown as ridgelines positioned near airport locations",
-    caption = "Source: daily airport performance data"
+    title    = "① Network — Arrival Punctuality" ,
+    subtitle = "Network-wide % on-time arrivals · 2023 vs 2024",
+    x = "% On-Time Arrivals", y = NULL
   ) +
-  theme(
-    plot.title = element_markdown(),
-    plot.subtitle = element_markdown(),
-    plot.caption = element_text(hjust = 0)
-  )
+  theme_day07() 
+
+# ── P2: Airport slope ─────────────────────────────────────────────────────────
+
+df_airport <- aptview |>
+  filter(PHASE == "ARR") |>
+  mutate(
+    PCT_ONTIME   = WITHIN_M15P15 * 100,
+    YEAR         = factor(YEAR),
+    AIRPORT_ICAO = APT
+  ) |>
+  left_join(
+    scopetable |> select(AIRPORT_ICAO, AIRPORT_NAME, REGION),
+    by = c("AIRPORT_ICAO", "REGION")
+  ) |>
+  select(REGION, AIRPORT_ICAO, AIRPORT_NAME, YEAR, PCT_ONTIME)
 
 
-## airport map - augmented
+df_airport_wide <- df_airport |>
+  select(REGION, AIRPORT_ICAO, AIRPORT_NAME, YEAR, PCT_ONTIME) |>
+  pivot_wider(names_from = YEAR, values_from = PCT_ONTIME,
+              names_prefix = "Y") |>
+  group_by(REGION) |>
+  mutate(AIRPORT_FCT = fct_reorder(AIRPORT_ICAO, Y2024)) |>
+  ungroup()
 
+df_airport_long <- df_airport_wide |>
+  pivot_longer(c(Y2023, Y2024), names_to = "YEAR", values_to = "PCT_ONTIME") |>
+  mutate(YEAR = recode(YEAR, Y2023 = "2023", Y2024 = "2024"))
 
-world      <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
-brazil_map <- world |> dplyr::filter(admin == "Brazil")
-europe_map <- world |> dplyr::filter(continent == "Europe" | admin == "Turkey")
+p2 <- ggplot(df_airport_wide, aes(y = AIRPORT_FCT)) +
+  geom_segment(aes(x = Y2023, xend = Y2024,
+                   yend = AIRPORT_FCT, color = REGION),
+               linewidth = 1.2, alpha = 0.45,
+               arrow = arrow(length = unit(0.12, "cm"), type = "closed")) +
+  geom_point(data = df_airport_long |> filter(YEAR == "2023"),
+             aes(x = PCT_ONTIME, color = REGION),
+             size = 2.5, shape = 21, fill = "white", stroke = 1.2) +
+  geom_point(data = df_airport_long |> filter(YEAR == "2024"),
+             aes(x = PCT_ONTIME, color = REGION),
+             size = 2.5, shape = 16) +
+  facet_wrap(~REGION, scales = "free_y", ncol = 2,
+             labeller = labeller(REGION = c("BRA" = "Brazil",
+                                            "EUR" = "Europe"))) +
+  scale_color_manual(values = pal_region, guide = "none") +
+  scale_x_continuous(limits = c(40, 80),
+                     labels = scales::label_number(suffix = "%")) +
+  labs(
+    title    = "② Airport View" ,
+    subtitle = "Each airport: ○ 2023 → ● 2024",
+    x = "% On-Time Arrivals", y = NULL
+  ) +
+  theme_day07() +
+  theme(axis.text.y = element_text(size = 8))
 
-airports_brazil <- data.frame(
-  icao    = c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG"),
-  name    = c("Brasília","Guarulhos","Congonhas","Campinas","Santos Dumont","Galeão","Belo Horizonte","Salvador","Porto Alegre","Curitiba","Recife","Eduardo Gomes"),
-  lon     = c(-47.92,-46.47,-46.66,-47.13,-43.17,-43.35,-43.97,-38.33,-51.17,-49.17,-34.92,-60.05),
-  lat     = c(-15.87,-23.43,-23.63,-23.01,-22.91,-22.75,-19.62,-12.91,-29.99,-25.53, -8.13, -3.04),
-  lbl_lon = c(-58.0,-57.0,-43.0,-57.0,-36.0,-35.0,-38.0,-45.0,-43.0,-62.0,-40.0,-60.0),
-  lbl_lat = c(-13.0,-24.0,-27.5,-19.0,-21.0,-26.0,-16.0,-10.0,-32.0,-29.0, -3.0,  0.0)
-)
+# ── P3: Distribution ──────────────────────────────────────────────────────────
+p3 <- ggplot(df_airport,
+             aes(x = PCT_ONTIME, y = REGION,
+                 group = interaction(REGION, YEAR),
+                 color = REGION, fill = REGION)) +
+  geom_boxplot(
+    position   = position_dodge(width = 0.6),
+    width      = 0.35, alpha = 0.15,
+    outlier.shape = NA, linewidth = 0.6
+  ) +
+  geom_point(
+    aes(shape = YEAR,
+        alpha = YEAR),
+    position = position_dodge(width = 0.6),
+    size = 2.5, stroke = 1.2,
+    fill = "white"
+  ) +
+  scale_shape_manual(values = c("2023" = 21, "2024" = 19), name = "Year") +
+  scale_alpha_manual(values = c("2023" = 0.4, "2024" = 1.0), guide = "none") +
+  scale_color_manual(values = pal_region, guide = "none") +
+  scale_fill_manual(values  = pal_region, guide = "none") +
+  scale_x_continuous(labels = scales::label_number(suffix = "%")) +
+  scale_y_discrete(labels = c("BRA" = "Brazil", "EUR" = "Europe")) +
+  labs(
+    title    = "③ Distribution — Across Airports",
+    subtitle = "Box: IQR · Points: individual airports · ○ 2023 ● 2024",
+    x = "% On-Time Arrivals (airport level)", y = NULL
+  ) +
+  theme_day07()
 
-airports_europe <- data.frame(
-  icao    = c("EHAM","LFPG","EGLL","EDDF","EDDM","LEMD","LPPT","LEBL","EGKK","LSZH","LTFM","LGAV"),
-  name    = c("Amsterdam","Paris","Heathrow","Frankfurt","Munich","Madrid","Lisbon","Barcelona","Gatwick","Zurich","Istanbul","Athens"),
-  lon     = c(  4.76,  2.55, -0.46,  8.57, 11.79, -3.57, -9.13,  2.07, -0.19,  8.55, 28.75, 23.94),
-  lat     = c( 52.31, 49.01, 51.48, 50.03, 48.35, 40.47, 38.77, 41.30, 51.15, 47.46, 41.27, 37.94),
-  lbl_lon = c(  6.0, -3.0, -8.0, 15.0, 17.0, -2.0, -11.0, 9.0,  -7.0,  14.0,  33.0,  30.0),
-  lbl_lat = c( 57.5, 45.0, 53.5, 54.5, 50.5,  38.0,  43.5, 39.0,  49.5,  45.5,  43.5,  37.5)
-)
-
-brazil_map = brazil_map |> dplyr::filter(icao %in% c("SBGR", "SBBR"))
-
-map_brazil <- ggplot() +
-  geom_sf(data = brazil_map, fill = "gray90", color = "white") +
-  coord_sf(xlim = c(-74, -30), ylim = c(-34, 5), expand = FALSE) +
-  geom_segment(data = airports_brazil,
-               aes(x = lbl_lon, y = lbl_lat, xend = lon, yend = lat),
-               color = "gray50", linewidth = 0.3) +
-  geom_point(data = airports_brazil,
-             aes(x = lon, y = lat), color = "#2E6B3E", size = 4) +
-  geom_label(data = airports_brazil,
-             aes(x = lbl_lon, y = lbl_lat, label = paste0(icao, "\n", name)),
-             size = 5.7, lineheight = 0.8, fill = "white",
-             label.padding = unit(0.35, "lines"), label.size = 1) +
-  labs(subtitle = "Brazil") +
-  theme_void() +
-  theme(
-    plot.subtitle    = element_text(size = 24, hjust = 0.5 , margin = margin(b = 4)),
-    plot.margin      = margin(10, 10, 10, 10),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background  = element_rect(fill = "white", color = NA)
-  )
-
-map_europe <- ggplot() +
-  geom_sf(data = europe_map, fill = "gray90", color = "white") +
-  coord_sf(xlim = c(-15, 37), ylim = c(35, 67), expand = FALSE) +
-  geom_segment(data = airports_europe,
-               aes(x = lbl_lon, y = lbl_lat, xend = lon, yend = lat),
-               color = "gray50", linewidth = 0.3) +
-  geom_point(data = airports_europe,
-             aes(x = lon, y = lat), color = "#4472C4", size = 4) +
-  geom_label(data = airports_europe,
-             aes(x = lbl_lon, y = lbl_lat, label = paste0(icao, "\n", name)),
-             size = 5.7, lineheight = 0.8, fill = "white",
-             label.padding = unit(0.35, "lines"), label.size = 1) +
-  labs(subtitle = "Europe") +
-  theme_void() +
-  theme(
-    plot.subtitle    = element_text(size = 24, hjust = 0.5 , margin = margin(b = 4)),
-    plot.margin      = margin(10, 10, 10, 10),
-    panel.background = element_rect(fill = "white", color = NA),
-    plot.background  = element_rect(fill = "white", color = NA)
-  )
-
-combined_plot <- map_brazil + map_europe +
-  patchwork::plot_layout(widths = c(5, 5)) +
-  patchwork::plot_annotation(
-    caption = "Charts for both regions not in scale",
-    theme   = theme(plot.caption = element_text(size = 20, hjust = 1, color = "#555555"))
-  )
-
-combined_plot
-
-ggplot2::ggsave(
-  filename = here::here("figures", "scope-airports-2025.png"),
-  plot     = combined_plot,
-  width    = 16, height = 8, dpi = 100,
-  units    = "in", bg = "white"
-)
-
-
-inset_layout_br <- data.frame(
-  icao = c("SBGR", "SBSP", "SBRJ", "SBSV", "SBPA"),
-  xmin = c(-55, -42, -36, -46, -42),
-  xmax = c(-49, -36, -30, -40, -36),
-  ymin = c(-26, -31, -26, -15, -34),
-  ymax = c(-22, -27, -22, -11, -30)
-)
-
-library(ggridges)
-library(grid)
-
-ridge_inset <- function(df_airport) {
-  ggplot(df_airport, aes(x = PUNC, y = PHASE, fill = PHASE)) +
-    geom_density_ridges(
-      scale = 0.9,
-      alpha = 0.75,
-      rel_min_height = 0.01
-    ) +
-    coord_cartesian(xlim = c(0.3, 0.95)) +
-    theme_void() +
-    theme(
-      legend.position = "none",
-      plot.margin = margin(2, 2, 2, 2)
-    )
-}
-
-```{r}
-map_brazil_insets <- map_brazil
-
-for (i in seq_len(nrow(inset_layout_br))) {
-
-  apt  <- inset_layout_br$icao[i]
-  box  <- inset_layout_br[i, ]
-
-  g <- ridge_inset(
-    daily_punc |> dplyr::filter(APT == apt)
-  ) |> ggplotGrob()
-
-  map_brazil_insets <- map_brazil_insets +
-    annotation_custom(
-      grob = g,
-      xmin = box$xmin, xmax = box$xmax,
-      ymin = box$ymin, ymax = box$ymax
-    )
-}
-
-# connector lines
-map_brazil_insets <- map_brazil_insets +
-  geom_segment(
-    data = airports_brazil |> dplyr::filter(icao == "SBGR"),
-    aes(
-      x = lon, y = lat,
-      xend = -49, yend = -24
+# ── Composição final ──────────────────────────────────────────────────────────
+final_plot <- (p1 / p2 / p3) +
+  plot_annotation(
+    title    = "BRA–EUR Punctuality: A Multiscale View  |  2023–2024",
+    subtitle = paste0(
+      "Same KPI · Three levels of zoom — Network → Airport → Distribution\n"
     ),
-    linewidth = 0.4,
-    colour = "gray40"
-  )
-``
-```
+    caption  = "Day 07 · #30DayChartChallenge · DECEA Performance Section & EUROCONTROL PRU",
+    theme = theme(
+      plot.title    = element_text(size = 15, face = "bold", color = "#1a1a2e"),
+      plot.subtitle = element_text(size = 9,  color = "#666688"),
+      plot.caption  = element_text(size = 8,  color = "#999999", hjust = 1),
+      plot.background = element_rect(fill = "#fafafa", color = NA)
+    )
+  ) +
+  plot_layout(heights = c(1, 2.2, 1.4)) &
+  theme(legend.position = "bottom")
 
-# helper to create same-sized inset boxes across regions
 
-```{r}
-make_inset_box <- function(
-  center_lon, center_lat,
-  xlim, ylim,
-  frac_x = 0.18,   # width as fraction of panel
-  frac_y = 0.16    # height as fraction of panel
-) {
-  width  <- diff(xlim) * frac_x
-  height <- diff(ylim) * frac_y
-
-  tibble::tibble(
-    xmin = center_lon - width  / 2,
-    xmax = center_lon + width  / 2,
-    ymin = center_lat - height / 2,
-    ymax = center_lat + height / 2
-  )
-}
-
-xlim_br <- c(-74, -30)
-ylim_br <- c(-34, 5)
-
-inset_centers_br <- tibble::tribble(
-  ~icao,  ~cx,   ~cy,
-  "SBGR", -52,  -24,
-  "SBRJ", -33,  -24,
-  "SBSV", -43,  -13
-  # ---- ADD MORE AIRPORTS HERE ----
+ggsave(
+  filename = "./figures/day07_multi-scale.png",
+  plot     = final_plot,
+  width    = 12,
+  height   = 13,
+  dpi      = 200,
+  bg       = "#fafafa"
 )
 
+message("✅  Saved: day07_distributions.png")
 
-insets_br <- inset_centers_br |>
-  rowwise() |>
-  dplyr::bind_cols(
-    make_inset_box(
-      center_lon = .$cx,
-      center_lat = .$cy,
-      xlim = xlim_br,
-      ylim = ylim_br,
-      frac_x = 0.18,
-      frac_y = 0.16
-    )
-  ) |>
-  ungroup()
+
 
 ```
-
-
-
-
-ggplot() +
-geom_sf(data = brazil_map, fill = "grey90") +
-geom_point(data = airports_brazil |> dplyr::filter(icao %in% c("SBGR")),
-  aes(x = lon, y = lat), color = "#2E6B3E", size = 4)
-
-
-```{r}
-xlim_eu <- c(-15, 37)
-ylim_eu <- c(35, 67)
-
-inset_centers_eu <- tibble::tribble(
-  ~icao,  ~cx, ~cy,
-  "EDDF",  18, 52,
-  "EGLL",  -8, 53,
-  "LEMD",   0, 39
-)
-
-insets_eu <- inset_centers_eu |>
-  rowwise() |>
-  dplyr::bind_cols(
-    make_inset_box(
-      center_lon = .$cx,
-      center_lat = .$cy,
-      xlim = xlim_eu,
-      ylim = ylim_eu,
-      frac_x = 0.18,
-      frac_y = 0.16
-    )
-  ) |>
-  ungroup()
-```
-
-https://github.com/DOI-USGS/vizlab-chart-challenge-23/blob/main/28_trends_msleckman/28_trends_msleckman.Rmd
