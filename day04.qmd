@@ -25,7 +25,7 @@ df <- data.frame(
   PHASE = c("Arrival", "Arrival", "Departure", "Departure",
              "Arrival", "Arrival", "Departure", "Departure"),
   N = c(61.8, 57.1, 79.7, 60.6,
-                  81.0, 77.3, 79.2, 76.1)
+                  59.7, 77.3, 81.2, 76.1)
 )
 
 
@@ -54,15 +54,16 @@ add_dly_early_late_groupings2 <- function(.punc_df){
 bra_punc <- read_csv(here::here("data" , "BRA-punc-2024.csv"))
 
  bra_punc |>
-     group_by(PHASE) |>
+     mutate(REG = "BRA" , YEAR = "2024") |> 
+     group_by(YEAR , REG) |>
      reframe(CHECK = n()
              , across(`(-INF,-60]`:`[60,INF)`, .fns = ~ sum(.x) )
      ) |>
      add_dly_early_late_groupings2() |>
      mutate(N = rowSums(across(`(-INF,-60]`:`[60,INF)`)) )|>
      mutate(across(.cols = EARLY:WITHIN_M15P15,.fns =  ~ .x / N) ) |> 
-     select(PHASE , WITHIN_M15P15) |>
-     mutate(REG = "BRA" , YEAR = "2024")
+     select(REG , YEAR , WITHIN_M15P15 , EARLY , LATE)
+     
  
  
  
@@ -138,10 +139,10 @@ plot_slope_punctuality_faceted <- function(
   ggplot2::ggplot(
     df,
     ggplot2::aes(
-      x     = .data[[region_var]],
+      x     = .data[[group_var]],
       y     = .data[[value_var]],
-      group = .data[[group_var]],
-      color = .data[[group_var]]
+      group = .data[[region_var]],
+      color = .data[[region_var]]
     )
   ) +
     ggplot2::geom_line(linewidth = 1.2, alpha = 0.85, lineend = "round") +
@@ -196,12 +197,12 @@ plot_slope_punctuality_faceted <- function(
       subtitle = subtitle,
       x        = NULL,
       y        = "Punctuality (%)",
-      color    = "Year",
+      color    = "",
       caption  = "Source: DECEA Performance Section & EUROCONTROL PRU"
     ) +
     
     ggplot2::scale_color_manual(
-  values = c("2024" = "#5BBCB0", "2025" = "blue")
+  values = c("Brazil" = "#5BBCB0", "Europe" = "blue")
     ) +
     
     ggplot2::theme_minimal(base_size = 12) +
