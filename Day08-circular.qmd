@@ -3,6 +3,12 @@ title: "Day 08 - circular"
 format: html
 ---
 
+```{r}
+library(ggplot2)
+library(ggview)
+```
+
+
 Circular “route wheel” for international flows
 •	What it could show: distribution of international traffic flows to/from Brazil vs Europe by world region, arranged around a circle.
 •	Data to tap: OD or entry/exit region mapping; aggregate by destination region and weight by flights/ASK.
@@ -116,3 +122,123 @@ circos.trackPlotRegion(
 
 ```
 
+
+
+
+
+
+```{r}
+library(igraph)
+library(ggraph)
+
+eur_bra_tofm <- eur_bra |> rename(from = ADEP_STUDY, to = ADES_STUDY)
+
+# crreate igraph object
+our_graph <- graph_from_data_frame(eur_bra_tofm) 
+
+# plot circular graph
+ggraph(our_graph, layout = "circle") +
+  geom_edge_link(
+    aes( start_cap = label_rect(node1.name)
+        ,end_cap = label_rect(node2.name))
+  ) +
+  geom_node_point(size = 5, color = "skyblue") +
+  geom_node_text(aes(label = name), repel = TRUE)
+```
+
+```{r}
+mywidth = 8
+myheight = 8
+mydpi = 300
+```
+
+
+```{r}
+nodes <- tibble(
+  name = unique(c(eur_bra$ADEP_STUDY, eur_bra$ADES_STUDY))
+) |> mutate(
+  region = ifelse(grepl("^S|^OTHER_BRA" ,x = name), "BRA", "EUR")
+)
+
+edges <- eur_bra |> 
+  transmute(
+    from = ADEP_STUDY
+    , to = ADES_STUDY
+    , weight = DEPS
+    , highlight = case_when(
+         from == "LPPT" ~ "top"
+       , to   == "SBGR" ~ "top"
+       , .default = "normal"
+    ,
+    )
+    ) |> 
+  filter(
+    !is.na(from)
+    ,!is.na(to)
+    ,from %in% nodes$name
+    ,to %in% nodes$name
+  )
+
+# create graph object
+mygraph <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
+
+ggraph(mygraph, layout = "circle") +
+  geom_edge_arc(
+    aes(
+       edge_width = weight
+      ,edge_alpha = weight
+      ,edge_colour = highlight    # set above in edges
+    )
+ #   , color = "grey40"   # link color now controlled separately
+    , strength = 0.4
+    , end_cap = circle(3, "mm")
+  ) +
+  
+  scale_edge_color_manual(
+    values = c(top = "#4472C4", normal = "grey30")
+  ) +
+  
+  geom_node_point(
+    aes(color = region)
+    ,size = 8
+  ) +
+  geom_node_text(
+    aes(label = 
+           ifelse(name == "OTHER_EUR","OTHER\nEUR",
+              ifelse(name == "OTHER_BRA","OTHER\nBRA"
+                     , name)        
+                  )
+         
+        ,angle = node_angle(x,y)
+        , x = x * 1.1  # Push labels outward horizontally
+        , y = y * 1.1  # Push labels outward vertically
+        , hjust = x < 0
+        ) # end aes
+    ,size = 5
+    
+    
+  ) +
+  scale_edge_width(range = c(0.3, 3)) +
+  scale_edge_alpha(range = c(0.2, 0.8)) +
+  
+  coord_fixed(
+     xlim = c(-1.25, 1.25)
+    ,ylim = c(-1.25, 1.25)
+  ) +
+  
+  theme_void() +
+  theme(
+     legend.position = "top"
+    ,legend.direction = "horizontal"
+  ) +
+  
+  canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
+
+```
+
+ggsave("./figures/day08-circular.png", 
+        width  = mywidth
+      , height = myheight
+      , unit = "in"
+      , dpi = 300)
+      
