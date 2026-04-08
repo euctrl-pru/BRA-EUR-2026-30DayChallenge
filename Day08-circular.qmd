@@ -386,8 +386,8 @@ ggraph(our_graph, layout = "circle") +
 ```
 
 ```{r}
-mywidth = 8
-myheight = 8
+mywidth = 7
+myheight = 9
 mydpi = 300
 ```
 
@@ -421,7 +421,9 @@ edges <- eur_bra |>
 # create graph object
 mygraph <- graph_from_data_frame(edges, vertices = nodes, directed = TRUE)
 
-ggraph(mygraph, layout = "circle") +
+plot_circular_network <- function(this_graph, ...){
+  
+  gg <- ggraph(this_graph, layout = "circle") +
   geom_edge_arc(
     aes(
        edge_width = weight
@@ -461,8 +463,8 @@ ggraph(mygraph, layout = "circle") +
   scale_edge_alpha(range = c(0.2, 0.8)) +
   
   coord_fixed(
-     xlim = c(-1.25, 1.25)
-    ,ylim = c(-1.25, 1.25)
+     xlim = c(-1.5, 1.5)
+    ,ylim = c(-1.5, 1.5)
   ) +
   
   theme_void() +
@@ -472,8 +474,46 @@ ggraph(mygraph, layout = "circle") +
   ) +
   
   canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
+  
+  return(gg)
+}
 
 ```
+
+```{r}
+library(ggtext)
+library(ggview)
+
+our_title <-"Chart-Challenge Day 08 – ***FLIGHT CONNECTIVITY* <br>between the study airports in Brazil and Europe during the year 2025**"
+our_sub <-
+  "São Paulo/Guarulhos (SBGR) highly connected to the major European study airport, in particular with regular services to Lisbon (LPPT) and Madrid (LEMD). Services from Lisbon (LPPT) connect to most Brazilian in the study. Other European airports (OTHER EUR) service São Paulo (SBGR), Rio de Janeiro/Galeãlo (SBGL), and Campinas (SBKP)."
+our_caption <-
+  "DECEA Performance Section & EUROCONTROL PRU <br> data available for download on GitHub."
+
+
+mygraph |> plot_circular_network() +
+  labs(
+     title    = our_title
+    ,subtitle = our_sub
+    ,caption = our_caption
+  ) +
+  theme(
+     plot.title    = element_textbox_simple(
+       size = rel(1.5)
+       ,margin = margin(t = 20, b=20)
+     )
+    ,plot.title.position = "plot"
+    ,plot.subtitle = element_textbox_simple(
+      size = rel(1.2)
+      ,margin = margin(t = 10, b = 20)
+    )
+    ,plot.caption  = element_textbox_simple(
+      margin = margin(t = 10, b = 10)
+    ) 
+  )
+
+```
+ 
 
 ggsave("./figures/day08-circular.png", 
         width  = mywidth
@@ -482,3 +522,130 @@ ggsave("./figures/day08-circular.png",
       , dpi = 300)
       
 
+```{r}
+# Define your color palette
+bra_eur_colours <- c(BRA = "#52854C", EUR = "#4E84C4")
+
+plot_circular_network <- function(this_graph, ...){
+  
+  gg <- ggraph(this_graph, layout = "circle") +
+  geom_edge_arc(
+    aes(
+       edge_width = weight
+      ,edge_alpha = weight
+      ,edge_colour = highlight
+    )
+    , strength = 0.4
+    , end_cap = circle(3, "mm")
+  ) +
+  
+  scale_edge_color_manual(
+    name = NULL, #"Highlighted Routes",  # Add legend title
+    values = c(top = "#4472C4", normal = "grey30"),
+    labels = c(top = "main LPPT/\nSBGR routes"
+               , normal = "minor routes/\nservices")  # Better labels
+  ) +
+  
+  geom_node_point(
+    aes(color = region)
+    ,size = 8
+  ) +
+  
+  scale_color_manual(  # Add this for node colors
+    name = NULL, # "Region",
+    values = bra_eur_colours
+    ,labels = c(BRA = "Brazil", EUR = "Europe") 
+  ) +
+  
+  geom_node_text(
+    aes(label = 
+           ifelse(name == "OTHER_EUR","OTHER\nEUR",
+              ifelse(name == "OTHER_BRA","OTHER\nBRA"
+                     , name)        
+                  )
+         
+        ,angle = node_angle(x,y)
+        , x = x * 1.1
+        , y = y * 1.1
+        , hjust = x < 0
+        )
+    ,size = 5
+  ) +
+  
+  scale_edge_width(range = c(0.3, 3), guide = "none") +  # Hide width legend
+  scale_edge_alpha(range = c(0.2, 0.8), guide = "none") +  # Hide alpha legend
+  
+  coord_fixed(
+     xlim = c(-1.5, 1.5)
+    ,ylim = c(-1.5, 1.5)
+  ) +
+  
+  theme_void() +
+  theme(
+     legend.position = "inside"  # Enable positioning inside plot
+    ,legend.position.inside = c(0.15, 0.92)  # Top left for regions
+    ,legend.direction = "vertical"
+    ,legend.box = "vertical"
+  ) +
+  
+  guides(
+    color = guide_legend(
+      order = 1, 
+      override.aes = list(size = 4),
+      theme = theme(legend.position.inside = c(0.05, 0.95))  # Top left
+    ),
+    edge_colour = guide_legend(
+      order = 2,
+      theme = theme(legend.position.inside = c(0.9, 0.05))  # Bottom right
+    )
+  )
+  
+  return(gg)
+}
+```
+
+```{r}
+library(ggtext)
+library(ggview)
+
+our_title <-"Chart-Challenge Day 08 – ***FLIGHT CONNECTIVITY* between the study airports in Brazil and Europe during the year 2025**"
+our_sub <-
+  "São Paulo/Guarulhos (SBGR) highly connected to the major European study airport, in particular with regular services to Lisbon (LPPT) and Madrid (LEMD). Services from Lisbon (LPPT) connect to most Brazilian in the study. Other European airports (OTHER EUR) service São Paulo (SBGR), Rio de Janeiro/Galeãlo (SBGL), and Campinas (SBKP)."
+our_caption <-
+  "DECEA Performance Section & EUROCONTROL PRU <br> data available for download on GitHub."
+
+
+mygraph |> plot_circular_network() +
+  labs(
+     title    = our_title
+    ,subtitle = our_sub
+    ,caption = our_caption
+  ) +
+  theme(
+     plot.title    = element_textbox_simple(
+       size = rel(1.5)
+       ,lineheight = 1.1
+       ,margin = margin(t = 20, b=20)
+     )
+    ,plot.title.position = "plot"
+    ,plot.subtitle = element_textbox_simple(
+      size = rel(1.2)
+      ,margin = margin(t = 10, b = 20)
+    )
+    ,plot.caption  = element_textbox_simple(
+      margin = margin(t = 10, b = 10)
+    ) 
+    ,plot.margin = margin(t = 10, r = 10, b = 10, l = 10)
+  ) +
+  
+  canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
+
+```
+    
+ggsave("./figures/day08-circular.png", 
+        width  = mywidth
+      , height = myheight
+      , unit = "in"
+      , dpi = 300
+      , bg = "white")  
+      

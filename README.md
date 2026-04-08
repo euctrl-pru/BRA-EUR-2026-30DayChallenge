@@ -61,3 +61,13 @@ TODO - Some explanatory notes to follow
 ![Day-03 contribution, mosaic](figures/day03-mosaic.jpeg)
 
 ### Day 4 - "slope"
+
+
+### Day 8 - "circular"
+
+We show the total amount of flights between the study airports in both regions.
+As we were unable to make a chord diagram work, we reverted to {ggraph} using a **circular** presentation of the network nodes.
+Links are depicted with *geom_arc()*.
+The annotations use the standard tools provided by {ggtext} and {showtext}.
+
+![Day-08 contribution](figures/day08-circular.png)
