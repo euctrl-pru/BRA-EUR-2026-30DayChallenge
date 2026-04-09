@@ -4,6 +4,8 @@ format: html
 ---
 
 ```{r}
+#| label: setup
+#| warning: false
 library(tidyverse)
 library(ggtext)
 library(ggview)
@@ -11,7 +13,9 @@ library(ggview)
 mywidth = 6
 myheight = 8
 mydpi = 300
+```
 
+```{r}
 # Read and combine data
 bra_2023 <- read_csv("./data/BRA-punc-2023.csv") |> mutate(region = "BRA", year = 2023)
 bra_2024 <- read_csv("./data/BRA-punc-2024.csv") |> mutate(region = "BRA", year = 2024)
@@ -76,10 +80,12 @@ delay_data <- all_data |>
     .groups = "drop"
   ) |>
   filter(total_delay_min > 0, n_delayed_flights > 0)  # Only observations with actual delays
+```
 
-# Prepare Lorenz curve data
+```{r}
+# Prepare Lorenz curve data - organise by year
 lorenz_data <- delay_data |>
-  group_by(region) |>
+  group_by(region, year) |>
   arrange(total_delay_min) |>
   mutate(
     # Cumulative share of observations (airport-day-phase combinations)
@@ -89,7 +95,7 @@ lorenz_data <- delay_data |>
   ) |>
   ungroup()
 
-# Calculate Gini coefficient
+# Calculate Gini coefficient ------------- helper function
 calculate_gini <- function(data) {
   x <- data$total_delay_min
   n <- length(x)
@@ -98,12 +104,11 @@ calculate_gini <- function(data) {
 }
 
 gini_values <- lorenz_data |>
-  group_by(region) |>
-  summarise(
+  group_by(region, year) |>
+  reframe(
     gini = calculate_gini(cur_data()),
     total_delay_hours = sum(total_delay_min) / 60,
-    n_obs = n(),
-    .groups = "drop"
+    n_obs = n()
   )
 
 print(gini_values)
@@ -115,6 +120,11 @@ pareto_points <- lorenz_data |>
   select(region, cum_obs_pct, cum_delay_pct)
 
 print(pareto_points)
+```
+```{r}
+# Create region-year combination for plotting
+lorenz_data <- lorenz_data |>
+  mutate(region_year = paste0(region, " ", year))
 
 # Create the plot
 bra_eur_colours <- c(BRA = "#52854C", EUR = "#4E84C4")
@@ -128,7 +138,9 @@ our_caption <- paste0(
   "<br>DECEA Performance Section & EUROCONTROL PRU | Data: 2023-2024"
 )
 
+
 ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region)) +
+  
   # Perfect equality line (45 degree)
   geom_abline(
     intercept = 0, slope = 1, 
@@ -211,3 +223,154 @@ ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region)) +
   
   canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
 ```
+
+Mutli-annual
+
+```{r}
+# Updated color scheme for 4 lines
+region_year_colours <- c(
+  "BRA 2023" = "#52854C",
+  "BRA 2024" = "#7FB069",  # Lighter green
+  "EUR 2023" = "#4E84C4",
+  "EUR 2024" = "#7BA3D8"   # Lighter blue
+)
+
+# Build caption with year-specific Gini values
+gini_text <- gini_values |>
+  mutate(label = paste0(region, " ", year, " = ", round(gini, 3))) |>
+  pull(label) |>
+  paste(collapse = ", ")
+
+our_caption <- paste0(
+  "Gini coefficient: ", gini_text,
+  "<br>Higher Gini = more concentrated delays (few bad days account for most delay).",
+  "<br>DECEA Performance Section & EUROCONTROL PRU"
+)
+
+# Plot with year comparison
+ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region_year)) +
+  geom_abline(
+    intercept = 0, slope = 1, 
+    linetype = "dashed", color = "gray40", linewidth = 0.8
+  ) +
+  annotate(
+    "text", x = 85, y = 80, 
+    label = "Perfect equality", 
+    color = "gray40", size = 3, hjust = 0.5, fontface = "italic"
+  ) +
+  
+  geom_line(aes(linetype = as.factor(year)), linewidth = 1) +
+  
+  scale_color_manual(
+    name = "Region & Year",
+    values = region_year_colours
+  ) +
+  
+  scale_linetype_manual(
+    name = "Year",
+    values = c("2023" = "solid", "2024" = "dashed")
+  ) +
+  
+  scale_x_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, 20),
+    labels = function(x) paste0(x, "%"),
+    expand = c(0, 0)
+  ) +
+  
+  scale_y_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, 20),
+    labels = function(x) paste0(x, "%"),
+    expand = c(0, 0)
+  ) +
+  
+  coord_fixed() +
+  
+  labs(
+    title = "Chart-Challenge Day 09 – **DELAY INEQUALITY**<br>Year-over-year comparison: 2023 vs 2024",
+    subtitle = "Has delay concentration changed? Curves shifting toward the diagonal indicate more evenly distributed delays.",
+    x = "Cumulative share of airport-day observations (%)",
+    y = "Cumulative share of total delay (%)",
+    caption = our_caption
+  ) +
+  
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(1.4), 
+      margin = margin(t = 10, b = 10)
+    ),
+    plot.title.position = "plot",
+    plot.subtitle = element_textbox_simple(
+      margin = margin(b = 20)
+    ),
+    plot.caption = element_textbox_simple(
+      margin = margin(t = 15, b = 10),
+      size = rel(0.85)
+    ),
+    legend.position = "inside",
+    legend.position.inside = c(0.2, 0.8),
+    panel.grid.minor = element_blank(),
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  ) +
+  canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
+```
+
+Alternatively, faceted view (might be clearer):
+
+```{r}
+
+ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region)) +
+  geom_abline(
+    intercept = 0, slope = 1, 
+    linetype = "dashed", color = "gray40", linewidth = 0.6
+  ) +
+  
+  geom_line(linewidth = 1.2) +
+  
+  facet_wrap(~year, ncol = 2) +
+  
+  scale_color_manual(
+    name = "Region",
+    values = bra_eur_colours,
+    labels = c(BRA = "Brazil", EUR = "Europe")
+  ) +
+  
+  scale_x_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, 25),
+    labels = function(x) paste0(x, "%")
+  ) +
+  
+  scale_y_continuous(
+    limits = c(0, 100),
+    breaks = seq(0, 100, 25),
+    labels = function(x) paste0(x, "%")
+  ) +
+  
+  coord_fixed() +
+  
+  labs(
+    title = "Chart-Challenge Day 09 – **DELAY INEQUALITY**<br>Brazil vs Europe: 2023 vs 2024",
+    subtitle = "Lorenz curves showing concentration of delays across airport-day observations",
+    x = "Cumulative share of observations (%)",
+    y = "Cumulative share of delay (%)",
+    caption = our_caption
+  ) +
+  
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_textbox_simple(size = rel(1.4), margin = margin(b = 10)),
+    plot.title.position = "plot",
+    plot.subtitle = element_textbox_simple(margin = margin(b = 15)),
+    plot.caption = element_textbox_simple(margin = margin(t = 15)),
+    legend.position = "top",
+    strip.text = element_text(face = "bold", size = rel(1.1)),
+    panel.grid.minor = element_blank()
+  ) +
+  canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
+
+
+```
+
