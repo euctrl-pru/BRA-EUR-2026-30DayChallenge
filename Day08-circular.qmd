@@ -368,7 +368,6 @@ ggchord(
   theme_void() +
   ggtitle("Chord Diagram with ggplot2 (ggchord)")
 
-=======
 
 eur_bra_tofm <- eur_bra |> rename(from = ADEP_STUDY, to = ADES_STUDY)
 
@@ -383,7 +382,6 @@ ggraph(our_graph, layout = "circle") +
   ) +
   geom_node_point(size = 5, color = "skyblue") +
   geom_node_text(aes(label = name), repel = TRUE)
-```
 
 ```{r}
 mywidth = 7
@@ -610,7 +608,7 @@ library(ggview)
 
 our_title <-"Chart-Challenge Day 08 – ***FLIGHT CONNECTIVITY* between the study airports in Brazil and Europe during the year 2025**"
 our_sub <-
-  "São Paulo/Guarulhos (SBGR) highly connected to the major European study airport, in particular with regular services to Lisbon (LPPT) and Madrid (LEMD). Services from Lisbon (LPPT) connect to most Brazilian in the study. Other European airports (OTHER EUR) service São Paulo (SBGR), Rio de Janeiro/Galeãlo (SBGL), and Campinas (SBKP)."
+  "São Paulo/Guarulhos (SBGR) highly connected to the major European study airport, in particular with regular services to Lisbon (LPPT) and Madrid (LEMD). Services from Lisbon (LPPT) connect to most Brazilian airports in the study. Other European airports (OTHER EUR) service São Paulo (SBGR), Rio de Janeiro/Galeãlo (SBGL), and Campinas (SBKP)."
 our_caption <-
   "DECEA Performance Section & EUROCONTROL PRU <br> data available for download on GitHub."
 
@@ -641,6 +639,7 @@ mygraph |> plot_circular_network() +
   canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
 
 ```
+
     
 ggsave("./figures/day08-circular.png", 
         width  = mywidth
