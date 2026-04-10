@@ -8,9 +8,10 @@ format: html
 #| warning: false
 library(tidyverse)
 library(ggtext)
+library(gridtext)
 library(ggview)
 # set view defaults
-mywidth = 6
+mywidth = 5
 myheight = 8
 mydpi = 300
 ```
@@ -114,10 +115,17 @@ gini_values <- lorenz_data |>
 print(gini_values)
 
 # Find 80/20 points
+# pareto_points <- lorenz_data |>
+#   group_by(region) |>
+#   slice_min(abs(cum_obs_pct - 20), n = 1) |>
+#   select(region, cum_obs_pct, cum_delay_pct)
+
 pareto_points <- lorenz_data |>
-  group_by(region) |>
+  group_by(region, year) |>
   slice_min(abs(cum_obs_pct - 20), n = 1) |>
+  ungroup() |> 
   select(region, cum_obs_pct, cum_delay_pct)
+
 
 print(pareto_points)
 ```
@@ -248,27 +256,44 @@ our_caption <- paste0(
 )
 
 # Plot with year comparison
-ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region_year)) +
+ggplot() +
   geom_abline(
     intercept = 0, slope = 1, 
     linetype = "dashed", color = "gray40", linewidth = 0.8
   ) +
   annotate(
-    "text", x = 85, y = 80, 
+    "text", x = 75, y = 80, 
     label = "Perfect equality", 
     color = "gray40", size = 3, hjust = 0.5, fontface = "italic"
+    ,angle = 45
   ) +
   
-  geom_line(aes(linetype = as.factor(year)), linewidth = 1) +
+  geom_vline(
+      xintercept = 20,
+      linetype = "dotted",
+      color = "grey50",
+      linewidth = 0.6
+) +
+    annotate("text", x = 20, y = 30,  # keep low to avoid curves
+              label = "20% of days",
+              angle = 90,
+              vjust = -0.5,size = 3,
+              color = "grey40"
+) +
+  geom_line(data = lorenz_data, 
+            aes(x = cum_obs_pct, y = cum_delay_pct
+                , color = region_year
+                , linetype = as.factor(year)
+                ), linewidth = 1) +
   
   scale_color_manual(
-    name = "Region & Year",
+    name = NULL, #"Region & Year",
     values = region_year_colours
   ) +
   
   scale_linetype_manual(
-    name = "Year",
-    values = c("2023" = "solid", "2024" = "dashed")
+    name = NULL, #"Year",
+    values = c("2023" = "solid", "2024" = "dotdash")
   ) +
   
   scale_x_continuous(
@@ -288,13 +313,17 @@ ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region_year)
   coord_fixed() +
   
   labs(
-    title = "Chart-Challenge Day 09 – **DELAY INEQUALITY**<br>Year-over-year comparison: 2023 vs 2024",
-    subtitle = "Has delay concentration changed? Curves shifting toward the diagonal indicate more evenly distributed delays.",
+    title = "<span style='font-size:12pt'><strong>Chart-Challenge Day 09</strong></span><br>**Are delays driven by a few bad days?**<br><span style='font-size:12pt'>Year-over-year comparison: 2023 vs 2024</span>",
+    
+    subtitle = "Has delay concentration changed? 
+    Each curve shows how delay builds across days—from best to worst. 
+    Greater curvature means a few days dominate total delay.
+    Brazil’s delays are driven by a small number of extreme days, while Europe’s are spread more evenly across operations and with virtually no change between 2023 and 2024.",
     x = "Cumulative share of airport-day observations (%)",
     y = "Cumulative share of total delay (%)",
     caption = our_caption
   ) +
-  
+
   theme_minimal(base_size = 12) +
   theme(
     plot.title = element_textbox_simple(
@@ -303,19 +332,34 @@ ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region_year)
     ),
     plot.title.position = "plot",
     plot.subtitle = element_textbox_simple(
-      margin = margin(b = 20)
+      size = rel(0.9),
+      margin = margin(t=5, b = 20)
     ),
     plot.caption = element_textbox_simple(
-      margin = margin(t = 15, b = 10),
-      size = rel(0.85)
+      margin = margin(r = 10, t = 20, b = 10),
+      size = rel(0.8)
+      ,hjust = 0 # left align
     ),
+    plot.caption.position = "plot",
+    
+    axis.title = element_text(size = rel(0.7)),
+    
     legend.position = "inside",
-    legend.position.inside = c(0.2, 0.8),
+    legend.position.inside = c(0.15, 0.8),
+    legend.text = element_text(size = rel(0.7)),
+    
     panel.grid.minor = element_blank(),
-    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+    plot.margin = margin(t = 10, r = 10, b = 10, l = 10)
+
   ) +
   canvas(width = mywidth, height = myheight, unit = "in", dpi = mydpi)
 ```
+
+ggsave("./xx-figures/day09-lorenz-01.png", width = mywidth, height = myheight, dpi = mydpi)
+
+ggsave("./figures/day09-lorenz.png", width = mywidth, height = myheight, dpi = mydpi)
+
+
 
 Alternatively, faceted view (might be clearer):
 
@@ -374,3 +418,4 @@ ggplot(lorenz_data, aes(x = cum_obs_pct, y = cum_delay_pct, color = region)) +
 
 ```
 
+ggsave("./xx-figures/day09-lorenz-01-panel.png", width = mywidth, height = myheight, dpi = mydpi)

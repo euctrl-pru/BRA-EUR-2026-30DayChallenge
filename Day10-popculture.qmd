@@ -1,0 +1,1696 @@
+---
+title: "Day 10 - pop-culture"
+format: html
+---
+
+NOTE OF CAUTION - THIS IS A TERRIBLE DOCUMENT AND NEEDS TO BE CLEANED UP.    
+IT SIMPLY TOOK TOO LONG TO GET THE GRAPH GOING!
+
+
+
+```{r}
+#| label: setup
+# key libraries
+library(dplyr)
+library(ggplot2)
+library(ggview)
+
+# ggview/ggsave defaults
+mywidth  = 8
+myheight = 6
+mydpi    = 300
+```
+
+## data preparation
+
+```{r}
+# study airports
+bra_apts <- c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG")
+eur_apts <- c("EGLL","EGKK","EHAM","EDDF","EDDM","LSZH","LFPG","LEMD","LEBL","LPPT","LTFM","LGAV")
+```
+
+extract EUR-BRA connections
+
+```{}
+source("./R/rqutils-zip.R")
+path_nm_flt <- here::here(here::here() |> dirname(), "__DATA" ,"NM-flight-table")
+nm_flt_2025 <- read_zip_content(path_nm_flt, "NM-flt-2025.zip") |> 
+  bind_rows()
+
+eur_bra_conns_2025 <- nm_flt_2025 |>  
+  select(ADEP, ADES, TYPE = AIRCRAFT_TYPE_ICAO_ID) |> 
+  filter(ADEP %in% eur_apts, ADES %in% bra_apts)
+
+eur_bra_conns_2025 |> write_csv("./data/BRA-EUR-aerodrome-pair-types-2025.csv")
+```
+
+```{r}
+eur_bra_conns_2025 <- read_csv("./data/BRA-EUR-aerodrome-pair-types-2025.csv", show_col_types = FALSE)
+
+top_x <- 6
+
+fleet <- eur_bra_conns_2025 |>
+  count(TYPE, name = "FLTS") |>
+  arrange(desc(FLTS)) |>
+  mutate(SHARE = FLTS / sum(FLTS)) |>
+  slice_head(n = top_x)
+
+# fleet ranking
+falcon <- tibble(
+  TYPE = "Millennium Falcon",
+  FLTS = 0,
+  SHARE = 1.2      # our top contender
+)
+
+fleet <- bind_rows(falcon, fleet) |> 
+  arrange(desc(SHARE)) |> 
+  mutate(TYPE = factor(TYPE, levels = TYPE) )
+
+fleet <- fleet |> 
+  mutate(is_falcon = TYPE == "Millennium Falcon")
+```
+
+```{r}
+fleet
+fleet$TYPE
+```
+
+```{r}
+# fleet2 <- fleet |> 
+#   mutate(TYPE = forcats::fct_recode(TYPE,
+#   "A339" = "A330-900",
+#   "B77W" = "777-300ER",
+#   "B789" = "787-9",
+#   "A359" = "A350-900"
+# ))
+
+p <- ggplot(fleet, aes(x = SHARE, y = TYPE)) +
+  geom_col(fill = "grey70") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  labs(
+    title = "Transatlantic Fleet Ranking",
+    subtitle = "Aircraft share on Europe–Brazil routes (plus one legendary outlier) - From widebody workhorses to one iconic smuggler ship!",
+    x = "Share of flights",
+    y = NULL
+  ) +
+  theme_minimal()
+
+p <- p +
+  geom_col(
+    data = subset(fleet, TYPE == "Millennium Falcon"),
+    fill = "gold"
+  )
+
+p <- p +
+  annotate(
+  "text",
+  x = 0.02,
+  y = "Millennium Falcon",
+  label = "Still waiting for its first scheduled service...",
+  hjust = 0,
+  size = 3.5
+)
+```
+
+```{r}
+p +
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+```
+
+https://commons.wikimedia.org/wiki/File:Boeing_737-300ER_silhouette.svg
+Peter James Lowden, CC BY-SA 4.0 <https://creativecommons.org/licenses/by-sa/4.0>, via Wikimedia Commons
+
+https://commons.wikimedia.org/wiki/File:Boeing_777-200_silhouette.svg
+Peter James Lowden, CC BY-SA 4.0 <https://creativecommons.org/licenses/by-sa/4.0>, via Wikimedia Commons
+
+# ---- setup ---------------------------------------------------------------
+dir.create("aircraft_silhouettes", showWarnings = FALSE)
+
+imgs <- tibble::tribble(
+  ~TYPE, ~view, ~url, ~ext,
+  # A330-900
+  "A339","top","https://commons.wikimedia.org/wiki/Special:FilePath/Airbus_A330_family_v1.1.png","png",
+  "A339","side","https://www.norebbo.com/wp-content/uploads/2018/06/A330-900_NEO_white_sm.jpg","jpg",
+
+  # B777-300ER
+  "B77W","top","https://commons.wikimedia.org/wiki/Special:FilePath/Boeing_777-300_silhouette.svg","svg",
+  "B77W","side","https://cdn.inspireuplift.com/uploads/images/seller_products/1700409973_EN-20231119-10564_Boeing777-300Silhouette5155.jpg","jpg",
+
+  # B787-9
+  "B789","top","https://jundroo.blob.core.windows.net/simpleplanes/GameData/aircraft/1323/9Cag5m-TopView.jpg","jpg",
+  "B789","side","https://cdn.inspireuplift.com/uploads/images/seller_products/1700406829_AW-20231119-10565_Boeing787-9Silhouette3662.jpg","jpg",
+
+  # A350-900
+  "A359","top","https://www.clipartmax.com/png/middle/481-4817215_1000-x-407-2-airbus-a350-top-view.png","png",
+  "A359","side","https://www.norebbo.com/wp-content/uploads/2013/07/A350-900_white.jpg","jpg",
+
+  # B777-200
+  "B772","top","https://commons.wikimedia.org/wiki/Special:FilePath/Boeing_777-200_silhouette.svg","svg",
+  "B772","side","https://i.etsystatic.com/32129826/r/il/f90229/5982314878/il_fullxfull.5982314878_541o.jpg","jpg",
+
+  # A330-200
+  "A332","top","https://commons.wikimedia.org/wiki/Special:FilePath/Airbus_A330-200_v1.0.png","png",
+  "A332","side","https://www.norebbo.com/wp-content/uploads/2014/03/A330-200_RR_white.jpg","jpg",
+
+  # Millennium Falcon (pun)
+  "MF","top","https://www.nicepng.com/png/detail/12-120090_created-with-raphal-millennium-falcon-from-top.png","png",
+  "MF","side","https://i.pinimg.com/736x/e9/64/32/e964321a2aa7f5ce8c69664d72e3ec78.jpg","jpg"
+)
+
+# ---- dependencies --------------------------------------------------------
+if (any(imgs$ext == "svg")) {
+  if (!requireNamespace("rsvg", quietly = TRUE))
+    stop("Please install rsvg: install.packages('rsvg')")
+}
+
+# ---- download + convert --------------------------------------------------
+index <- list()
+
+for (i in seq_len(nrow(imgs))) {
+  row <- imgs[i,]
+  out_dir <- file.path("aircraft_silhouettes", row$TYPE)
+  dir.create(out_dir, showWarnings = FALSE)
+
+  target_png <- file.path(out_dir, paste0(row$TYPE, "_", row$view, ".png"))
+
+  if (row$ext == "svg") {
+    tmp_svg <- tempfile(fileext = ".svg")
+    download.file(row$url, tmp_svg, mode = "wb", quiet = TRUE)
+    rsvg::rsvg_png(tmp_svg, target_png, width = 2000)
+    unlink(tmp_svg)
+  } else {
+    download.file(row$url, target_png, mode = "wb", quiet = TRUE)
+  }
+
+  index[[i]] <- data.frame(
+    TYPE = row$TYPE,
+    view = row$view,
+    file = file.path(row$TYPE, basename(target_png))
+  )
+}
+
+
+<!-- imgs <- tribble( -->
+<!--   ~TYPE, ~view, ~url, ~ext, -->
+
+<!--   # --- FIXED / CLEAN ASSETS ONLY -------------------------------------- -->
+
+<!--   # Boeing 787-9 (clean side view) -->
+<!--   "B789","side","https://commons.wikimedia.org/wiki/Special:FilePath/Boeing_787-9_silhouette.svg","svg", -->
+
+<!--   # Airbus A350-900 (clean top view) -->
+<!--   "A359","top","https://upload.wikimedia.org/wikipedia/commons/3/3c/Airbus_A350_top_view.svg","svg", -->
+
+<!--   # Airbus A330-200 (clean top view) -->
+<!--   "A332","top","https://upload.wikimedia.org/wikipedia/commons/6/6e/Airbus_A330-200_top_view.svg","svg", -->
+
+<!--   # Airbus A330-900 (clean top view) -->
+<!--   "A339","top","https://upload.wikimedia.org/wikipedia/commons/8/82/Airbus_A330neo_top_view.svg","svg" -->
+<!-- ) -->
+
+if (!requireNamespace("rsvg", quietly = TRUE))
+  stop("Please install rsvg: install.packages('rsvg')")
+
+index <- list()
+
+
+index <- do.call(rbind, index)
+
+write.csv(index, "aircraft_silhouettes/index.csv", row.names = FALSE)
+
+
+
+library(tibble)
+
+dir.create("aircraft_silhouettes", showWarnings = FALSE)
+
+imgs <- tribble(
+  ~TYPE, ~view, ~url, ~ext,
+
+  # --- FIXED / CLEAN ASSETS ONLY --------------------------------------
+
+  # Boeing 787-9 (clean side view)
+  "B789","side","https://commons.wikimedia.org/wiki/Special:FilePath/Boeing_787-9_silhouette.svg","svg",
+
+  # Airbus A350-900 (clean top view)
+  "A359","top","https://upload.wikimedia.org/wikipedia/commons/3/3c/Airbus_A350_top_view.svg","svg",
+
+  # Airbus A330-200 (clean top view)
+  "A332","top","https://upload.wikimedia.org/wikipedia/commons/6/6e/Airbus_A330-200_top_view.svg","svg",
+
+  # Airbus A330-900 (clean top view)
+  "A339","top","https://upload.wikimedia.org/wikipedia/commons/8/82/Airbus_A330neo_top_view.svg","svg"
+)
+
+if (!requireNamespace("rsvg", quietly = TRUE))
+  stop("Please install rsvg: install.packages('rsvg')")
+
+index <- list()
+
+for (i in seq_len(nrow(imgs))) {
+  row <- imgs[i,]
+  out_dir <- file.path("aircraft_silhouettes", row$TYPE)
+  dir.create(out_dir, showWarnings = FALSE)
+
+  out_png <- file.path(out_dir, paste0(row$TYPE, "_", row$view, ".png"))
+
+  tmp <- tempfile(fileext = ".svg")
+  download.file(row$url, tmp, mode = "wb", quiet = TRUE)
+  rsvg::rsvg_png(tmp, out_png, width = 2000)
+  unlink(tmp)
+
+  index[[i]] <- data.frame(
+    TYPE = row$TYPE,
+    view = row$view,
+    file = file.path(row$TYPE, basename(out_png))
+  )
+}
+
+write.csv(do.call(rbind, index),
+          "aircraft_silhouettes/index_updates_clean.csv",
+          row.names = FALSE)
+
+message("✅ Clean silhouettes downloaded (gear-up, no watermark).")
+
+```{r}
+
+library(ggimage)
+
+idx <- read.csv("aircraft_silhouettes/index.csv")
+idx$path <- file.path("aircraft_silhouettes", idx$file)
+
+idx <- idx |> mutate(
+  x = row_number(), y = row_number()
+)
+
+ggplot(idx, aes(x, y)) +
+  geom_image(aes(image = path), size = 0.08) +
+  coord_equal()
+
+```
+```{r}
+library(tidyverse)
+
+# Create a simplified Millennium Falcon-inspired silhouette
+# This is a stylized representation for educational/research purposes
+create_falcon_silhouette <- function(output_path = "millennium_falcon_silhouette.png") {
+  
+  # Define the iconic saucer shape with mandibles
+  t <- seq(0, 2*pi, length.out = 100)
+  
+  # Main saucer body (circular)
+  saucer <- tibble(
+    x = cos(t) * 1,
+    y = sin(t) * 0.95,
+    part = "saucer"
+  )
+  
+  # Offset cockpit (the distinctive side-mounted cockpit)
+  cockpit <- tibble(
+    x = cos(t) * 0.25 + 0.6,
+    y = sin(t) * 0.25 + 0.3,
+    part = "cockpit"
+  )
+  
+  # Mandibles (the iconic "fork" at the front)
+  # Right mandible
+  mandible_r <- tibble(
+    x = c(0.85, 1.3, 1.35, 1.3, 0.9),
+    y = c(0.15, 0.25, 0.3, 0.35, 0.25),
+    part = "mandible_r"
+  )
+  
+  # Left mandible
+  mandible_l <- tibble(
+    x = c(0.85, 1.3, 1.35, 1.3, 0.9),
+    y = c(-0.15, -0.25, -0.3, -0.35, -0.25),
+    part = "mandible_l"
+  )
+  
+  # Rear engine section (notch in the back)
+  engine_notch <- tibble(
+    x = c(-1, -1.15, -1.15, -1),
+    y = c(0.3, 0.25, -0.25, -0.3),
+    part = "engine"
+  )
+  
+  # Combine all parts
+  falcon <- bind_rows(
+    saucer,
+    cockpit,
+    mandible_r,
+    mandible_l,
+    engine_notch
+  )
+  
+  # Create the plot
+  p <- ggplot(falcon, aes(x = x, y = y, group = part)) +
+    geom_polygon(fill = "black", color = "black") +
+    coord_fixed() +
+    theme_void() +
+    theme(
+      plot.background = element_rect(fill = "transparent", color = NA),
+      panel.background = element_rect(fill = "transparent", color = NA)
+    )
+  
+  # Save as PNG with transparent background
+  ggsave(
+    output_path,
+    plot = p,
+    width = 4,
+    height = 4,
+    dpi = 300,
+    bg = "transparent"
+  )
+  
+  return(p)
+}
+
+# Create the silhouette
+create_falcon_silhouette("falcon_silhouette.png")
+```
+
+```{r}
+library(tidyverse)
+
+# Create a more accurate Millennium Falcon-inspired silhouette
+create_falcon_silhouette <- function(output_path = "millennium_falcon_silhouette.png") {
+  
+  # Main saucer body (slightly wider than tall)
+  t <- seq(0, 2*pi, length.out = 100)
+  saucer <- tibble(
+    x = cos(t) * 1.0,
+    y = sin(t) * 0.92,
+    part = "saucer"
+  )
+  
+  # Offset cockpit - the iconic side-mounted tube
+  # Positioned on the starboard (right) side
+  cockpit_t <- seq(0, 2*pi, length.out = 50)
+  cockpit <- tibble(
+    x = cos(cockpit_t) * 0.18 + 0.75,  # Offset to the right side
+    y = sin(cockpit_t) * 0.20 + 0.0,   # Centered vertically
+    part = "cockpit"
+  )
+  
+  # Forward mandibles - the distinctive "fork" prongs
+  # These are the two prominent forward-facing arms
+  
+  # Top/Starboard mandible (right side)
+  mandible_r <- tibble(
+    x = c(0.95, 1.4, 1.45, 1.42, 1.35, 1.25, 0.90),  # Extended forward
+    y = c(0.20, 0.32, 0.35, 0.38, 0.40, 0.42, 0.30),  # Aligned with flank
+    part = "mandible_r"
+  )
+  
+  # Bottom/Port mandible (left side)  
+  mandible_l <- tibble(
+    x = c(0.95, 1.4, 1.45, 1.42, 1.35, 1.25, 0.90),
+    y = c(-0.20, -0.32, -0.35, -0.38, -0.40, -0.42, -0.30),
+    part = "mandible_l"
+  )
+  
+  # Central gap between mandibles (the "mouth")
+  # This creates the distinctive gap between the prongs
+  gap_top <- tibble(
+    x = c(0.95, 1.35, 1.35, 0.95),
+    y = c(0.20, 0.40, 0.20, 0.15),
+    part = "gap_top"
+  )
+  
+  gap_bottom <- tibble(
+    x = c(0.95, 1.35, 1.35, 0.95),
+    y = c(-0.20, -0.40, -0.20, -0.15),
+    part = "gap_bottom"
+  )
+  
+  # Rear engine section - distinctive rectangular notch
+  engine_notch <- tibble(
+    x = c(-0.98, -1.20, -1.20, -0.98),
+    y = c(0.35, 0.30, -0.30, -0.35),
+    part = "engine"
+  )
+  
+  # Sensor dish (top center detail)
+  dish_t <- seq(0, 2*pi, length.out = 30)
+  sensor_dish <- tibble(
+    x = cos(dish_t) * 0.12 + 0.15,
+    y = sin(dish_t) * 0.12 + 0.0,
+    part = "dish"
+  )
+  
+  # Combine all parts
+  falcon <- bind_rows(
+    saucer,
+    cockpit,
+    mandible_r,
+    mandible_l,
+    sensor_dish,
+    engine_notch
+  )
+  
+  # Create the plot with black silhouette
+  p <- ggplot() +
+    # Main body
+    geom_polygon(
+      data = falcon,
+      aes(x = x, y = y, group = part),
+      fill = "black",
+      color = "black"
+    ) +
+    # Remove the gap areas (make them transparent by drawing over)
+    geom_polygon(
+      data = gap_top,
+      aes(x = x, y = y),
+      fill = "white",
+      color = "white"
+    ) +
+    geom_polygon(
+      data = gap_bottom,
+      aes(x = x, y = y),
+      fill = "white",
+      color = "white"
+    ) +
+    coord_fixed(xlim = c(-1.3, 1.5), ylim = c(-1.1, 1.1)) +
+    theme_void() +
+    theme(
+      plot.background = element_rect(fill = "transparent", color = NA),
+      panel.background = element_rect(fill = "transparent", color = NA),
+      plot.margin = margin(0, 0, 0, 0)
+    )
+  
+  # Save as PNG with transparent background
+  ggsave(
+    output_path,
+    plot = p,
+    width = 5,
+    height = 4,
+    dpi = 300,
+    bg = "transparent"
+  )
+  
+  cat("✓ Millennium Falcon silhouette saved to:", output_path, "\n")
+  
+  return(p)
+}
+
+# Create the improved silhouette
+falcon_plot <- create_falcon_silhouette("millennium_falcon_silhouette.png")
+
+# Preview it
+print(falcon_plot)
+```
+```{r}
+library(tidyverse)
+library(magick)
+
+# Function to download and process the Pixabay Millennium Falcon image
+process_falcon_from_pixabay <- function(
+    pixabay_url = "https://pixabay.com/get/g36c2e0f88e976fe86e97bad1cc9dc7ce87f07e6cb6e96ba5d4a84fba8b0de2740bcd4ce22ac50e10e86d61b9fd14b0fd_1280.jpg",
+    output_path = "millennium_falcon_silhouette.png"
+) {
+  
+  cat("Step 1: Downloading image from Pixabay...\n")
+  
+  # You'll need to manually download from Pixabay and provide the path
+  # OR use this direct download URL if it works
+  
+  tryCatch({
+    # Try to download directly
+    download.file(pixabay_url, "temp_falcon.jpg", mode = "wb")
+    img <- image_read("temp_falcon.jpg")
+    cat("  ✓ Image downloaded successfully\n")
+  }, error = function(e) {
+    cat("  ✗ Could not download automatically. Please:\n")
+    cat("    1. Visit: https://pixabay.com/illustrations/millennium-falcon-star-wars-1343464/\n")
+    cat("    2. Click 'Free Download' and save the image\n")
+    cat("    3. Save it as 'temp_falcon.jpg' in your working directory\n")
+    cat("    4. Run this function again\n")
+    stop("Manual download required")
+  })
+  
+  cat("\nStep 2: Processing image to create silhouette...\n")
+  
+  # Get image info
+  info <- image_info(img)
+  cat("  Original dimensions:", info$width, "x", info$height, "\n")
+  
+  # Step 1: Convert to grayscale
+  img_gray <- img %>% image_convert(colorspace = "Gray")
+  cat("  ✓ Converted to grayscale\n")
+  
+  # Step 2: Increase contrast to separate ship from background
+  img_contrast <- img_gray %>%
+    image_contrast(sharpen = 10) %>%
+    image_modulate(brightness = 80)
+  cat("  ✓ Enhanced contrast\n")
+  
+  # Step 3: Create a threshold to isolate the ship
+  # This turns everything dark into black and light into transparent
+  img_threshold <- img_contrast %>%
+    image_threshold(type = "black", threshold = "40%") %>%
+    image_transparent("white")
+  cat("  ✓ Applied threshold to isolate ship\n")
+  
+  # Step 4: Clean up edges with morphology
+  img_clean <- img_threshold %>%
+    image_morphology(method = "Close", kernel = "Disk:2") %>%
+    image_despeckle()
+  cat("  ✓ Cleaned up edges\n")
+  
+  # Step 5: Make it a pure black silhouette
+  img_silhouette <- img_clean %>%
+    image_colorize(opacity = 100, color = "black") %>%
+    image_background("transparent")
+  cat("  ✓ Created black silhouette\n")
+  
+  # Step 6: Trim excess transparent space
+  img_final <- img_silhouette %>%
+    image_trim() %>%
+    image_border("transparent", "10x10")
+  cat("  ✓ Trimmed to ship outline\n")
+  
+  # Step 7: Resize to standard size (width = 800px)
+  img_final <- img_final %>%
+    image_resize("800x")
+  cat("  ✓ Resized for chart use\n")
+  
+  # Save the final silhouette
+  image_write(img_final, output_path, format = "png")
+  cat("\n✓ Falcon silhouette saved to:", output_path, "\n")
+  
+  # Clean up temp file
+  if (file.exists("temp_falcon.jpg")) {
+    file.remove("temp_falcon.jpg")
+  }
+  
+  # Display the result
+  plot(img_final)
+  
+  return(img_final)
+}
+
+# Alternative: Manual download version
+# If the automatic download doesn't work, use this:
+process_falcon_manual <- function(
+    input_image = "downloaded_falcon.jpg",  # Your manually downloaded image
+    output_path = "millennium_falcon_silhouette.png"
+) {
+  
+  cat("Processing", input_image, "...\n\n")
+  
+  if (!file.exists(input_image)) {
+    stop("Image file not found! Please download from Pixabay first.")
+  }
+  
+  # Read the image
+  img <- image_read(input_image)
+  
+  cat("Step 1: Converting to grayscale...\n")
+  img_gray <- img %>% image_convert(colorspace = "Gray")
+  
+  cat("Step 2: Enhancing contrast...\n")
+  img_contrast <- img_gray %>%
+    image_contrast(sharpen = 10) %>%
+    image_modulate(brightness = 80)
+  
+  cat("Step 3: Isolating the ship...\n")
+  img_threshold <- img_contrast %>%
+    image_threshold(type = "black", threshold = "40%") %>%
+    image_transparent("white")
+  
+  cat("Step 4: Cleaning edges...\n")
+  img_clean <- img_threshold %>%
+    image_morphology(method = "Close", kernel = "Disk:2") %>%
+    image_despeckle()
+  
+  cat("Step 5: Creating pure black silhouette...\n")
+  img_silhouette <- img_clean %>%
+    image_colorize(opacity = 100, color = "black") %>%
+    image_background("transparent")
+  
+  cat("Step 6: Trimming and finalizing...\n")
+  img_final <- img_silhouette %>%
+    image_trim() %>%
+    image_border("transparent", "10x10") %>%
+    image_resize("800x")
+  
+  # Save
+  image_write(img_final, output_path, format = "png")
+  cat("\n✓ Falcon silhouette saved to:", output_path, "\n")
+  
+  # Display
+  plot(img_final)
+  
+  return(img_final)
+}
+
+# TRY THIS FIRST - Automatic download and processing
+# falcon <- process_falcon_from_pixabay()
+
+# IF THAT FAILS - Manual process:
+# 1. Download from https://pixabay.com/illustrations/millennium-falcon-star-wars-1343464/
+# 2. Save as "downloaded_falcon.jpg" in your working directory
+# 3. Run:
+# falcon <- process_falcon_manual("downloaded_falcon.jpg")
+```
+
+Image by <a href="https://pixabay.com/users/jean52photosstock-14428522/?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=6054792">Jean photosstock</a> from <a href="https://pixabay.com//?utm_source=link-attribution&utm_medium=referral&utm_campaign=image&utm_content=6054792">Pixabay</a>
+
+tie fighter
+<a href="https://getdrawings.com/tie-fighter-vector">Tie Fighter Vector</a>
+
+```{r}
+library(tidyverse)
+library(ggimage)
+library(scales)
+library(showtext)
+
+fleet <- fleet |> mutate(is_falcon = SHARE > 1)
+
+```
+
+get some fancy plots
+
+```{r}
+font_add_google("Orbitron", "title")
+font_add_google("Inter", "body")
+showtext_auto()
+
+
+img_idx <- read_csv("aircraft_silhouettes/index.csv", show_col_types = F) |>
+  filter(view == "side") |>
+  mutate(path = file.path("aircraft_silhouettes", file))
+
+fleet <- fleet |> mutate(is_falcon = SHARE > 1)
+fleet <- fleet |> left_join(img_idx, by = c("TYPE"))
+
+pth_falcon <- "aircraft_silhouettes/jean52photosstock-ufo-6054792.png"
+fleet <- fleet |> 
+  mutate( path = ifelse(is_falcon, pth_falcon, path))
+
+```
+
+```{r}
+
+
+# lollipop
+lolli_line = 2
+
+p <- fleet |> ggplot(aes(y = TYPE))
+
+p <- p +
+  geom_segment(
+    data = fleet |> filter(!is_falcon),
+    aes(x = 0, xend = SHARE, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "grey40"
+  )
+#--------- add falcon stick
+p <- p +
+  geom_segment(
+    data = fleet |> filter(is_falcon),
+    aes(x = 0, xend = 1, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "gold"
+  ) +
+  geom_segment(
+    data = fleet |> filter(is_falcon),
+    aes(x = 1, xend = SHARE, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) 
+
+
+p <- p +
+  geom_image( data = fleet,
+    aes(x = SHARE, image = path),
+    size = 0.085,
+    asp = 1
+  )
+
+
+p <- p +
+  scale_x_continuous(
+    limits = c(0, 2),
+    labels = percent_format(accuracy = 1),
+    breaks = c(seq(0, 1, by = 0.25), 1.25),
+    expand = expansion(mult = c(0, 0.05))
+  )
+
+p <- p +
+  annotate(
+    "text",
+    x = 1.18,
+    y = "Millennium Falcon",
+    label = "Hyperdrive engaged",
+    family = "title",
+    size = 4,
+    colour = "grey30"
+  )
+
+p +
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+```
+
+
+```{r}
+lolli_line = 5
+dot_start  = 0.5
+
+fleet_bkup <- fleet
+fleet <- fleet |> 
+  mutate(path = case_when(
+    TYPE == "Millennium Falcon" ~ "./aircraft_silhouettes/jean52photosstock-ufo-6054792.png"
+    , TYPE == "A339" ~ "./aircraft_silhouettes/A339_side.png"
+    , TYPE == "A332" ~ "./aircraft_silhouettes/A332_side.png"
+    , TYPE == "A359" ~ "./aircraft_silhouettes/A350-900.png"
+    , TYPE == "B77W" ~ "./aircraft_silhouettes/B777-9_side.png"
+    , TYPE == "B772" ~ "./aircraft_silhouettes/B772_side.png"
+    , TYPE == "B789" ~ "./aircraft_silhouettes/B787_side.png"
+    , .default = NA
+  ))
+
+fleet$TYPE <- factor(fleet$TYPE, levels = rev(unique(fleet$TYPE)))
+
+p <- ggplot(data = fleet) +
+  # --------- main stick segment portion ----------------------
+  geom_segment(
+    aes(  x = 0, xend = ifelse(is_falcon, dot_start, SHARE)
+        , y = TYPE, yend = TYPE
+        , color = is_falcon),
+    linewidth = lolli_line
+  ) +
+  scale_color_manual(values = c("grey80", "gold"), guide = "none" ) +
+  
+  geom_segment(
+    data = fleet |> filter(is_falcon),
+    aes(x = dot_start, xend = SHARE, y = TYPE, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) +
+  # -------- place images without falcon  ------------------
+  geom_image(data = fleet |> filter(!is_falcon),
+    aes(x = SHARE
+        , y = TYPE
+        , image = path),
+    size = 0.4,
+    asp = 1
+  ) +
+  
+  # -------- canvas settings -----------------------------------
+  scale_x_continuous(limits = c(0,1.6),expand = c(0, NA)
+                     ,labels = scales::percent_format()
+                     ,breaks = c(0,0.25,0.5,0.75,1)) +
+  canvas(width = mywidth, height = myheight, dpi = mydpi) + NULL
+  
+   # -------- annotations
+
+```
+
+library(ggtext)
+font_add_google("Space Grotesk", "space")
+font_add_google("Orbitron", "orbitron")
+showtext_auto()
+library(ggfx)
+
+
+```{r}
+#install.packages("ggfx")
+
+our_title <- "<span style='font-size:30pt'><strong>Chart-Challenge Day 10</strong></span><br>**The Workhorses of Long Distance Flying Between Europe and Brazil in 2025**"
+
+our_subtitle <- "Share of flights by aircraft type operated."
+
+our_caption <- "Gini coefficient: Higher Gini = more concentrated delays (few bad days account for most delay).<br>DECEA Performance Section & EUROCONTROL PRU"
+
+
+
+
+p +
+  with_outer_glow(
+    geom_image(
+      data = fleet |> filter(is_falcon),
+      aes(x = SHARE, y = TYPE, image = path),
+      size = 0.4
+    ),
+    colour = "#FFD166",
+    sigma = 40
+  ) +
+  annotate(
+    "text",
+    x = 1.18,
+    y = "A339",
+    label = "Hyperdrive engaged \nto fast to be counted!",
+    family = "title",
+    size = 12,
+    colour = "grey30"
+  ) +
+
+  labs(title = our_title, subtitle = our_subtitle, caption = our_caption
+       ,y = NULL, x = NULL) +
+  theme_clean(base_size = 24) +
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(3)
+      ,lineheight = 0.2
+      ,family = "orbitron"
+      ,margin = margin(b = 10)
+    )
+    ,plot.title.position = "plot"
+    
+    ,plot.subtitle = element_textbox_simple(
+      size = rel(2), family = "space"
+      ,margin = margin(b = 20)
+    )
+    
+    ,axis.text = element_text(size = rel(1.5), family = "space")
+  )
+```
+
+```{r}
+
+```
+
+library(tidyverse)
+library(ggimage)
+library(ggtext)
+library(ggshadow)
+library(scales)
+
+```{r}
+
+# Prepare your data with manual x-coordinates for images
+fleet <- fleet |> 
+  mutate(
+    path = case_when(
+      TYPE == "Millennium Falcon" ~ "./aircraft_silhouettes/jean52photosstock-ufo-6054792.png",
+      TYPE == "A339" ~ "./aircraft_silhouettes/A339_side.png",
+      TYPE == "A332" ~ "./aircraft_silhouettes/A332_side.png",
+      TYPE == "A359" ~ "./aircraft_silhouettes/A350-900.png",
+      TYPE == "B77W" ~ "./aircraft_silhouettes/B777-9_side.png",
+      TYPE == "B772" ~ "./aircraft_silhouettes/B772_side.png",
+      TYPE == "B789" ~ "./aircraft_silhouettes/B787_side.png",
+      .default = NA
+    ),
+    # Add manual image x-position (shifted right from bar end)
+    image_x = ifelse(is_falcon, SHARE + 0.18, SHARE + 0.11),
+    # Add y-position as numeric for precise control
+    y_numeric = as.numeric(TYPE),
+    # Format share labels
+    share_label = ifelse(is_falcon, "", paste0(round(SHARE * 100, 1), "%"))
+  )
+
+# Update factor levels with line break for Falcon
+fleet <- fleet |> 
+  mutate(TYPE = fct_recode(TYPE, "Millennium\nFalcon" = "Millennium Falcon"))
+
+# Re-factor with correct order
+fleet$TYPE <- factor(fleet$TYPE, levels = rev(unique(fleet$TYPE)))
+
+# Main plot
+p <- ggplot(data = fleet) +
+  # Main stick segment
+  geom_segment(
+    aes(
+      x = 0, 
+      xend = ifelse(is_falcon, dot_start, SHARE),
+      y = TYPE, 
+      yend = TYPE,
+      color = is_falcon
+    ),
+    linewidth = lolli_line
+  ) +
+  scale_color_manual(values = c("grey80", "gold"), guide = "none") +
+  
+  # Dotted portion for Falcon
+  geom_segment(
+    data = fleet |> filter(is_falcon),
+    aes(x = dot_start, xend = SHARE, y = TYPE, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) +
+  
+  # Share percentage labels INSIDE bars (left-aligned)
+  geom_text(
+    data = fleet |> filter(!is_falcon),
+    aes(x = 0.02, y = TYPE, label = share_label),
+    hjust = 0,
+    size = 6,
+    family = "space",
+    color = "grey30",
+    fontface = "bold"
+  ) +
+  
+  # Place images with manual x-position
+  # geom_image(
+  #   data = fleet,
+  #   aes(x = image_x, y = TYPE, image = path),
+  #   size = 0.4,
+  #   asp = 1
+  # ) +
+  
+  geom_image(
+  data = fleet |> filter(! is_falcon),
+  aes(
+    x = image_x,
+    y = ifelse(TYPE == "A359", y_numeric + 0.2, y_numeric),
+    image = path
+  ),
+  size = 0.4,
+  asp = 1
+) +
+  
+  # Canvas settings
+  scale_x_continuous(
+    limits = c(0, 1.6),
+    expand = c(0, NA),
+    labels = percent_format(),
+    breaks = c(0, 0.25, 0.5, 0.75, 1)
+  ) +
+  
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+
+# Catchy subtitles - pick your favorite!
+subtitle_options <- c(
+  # Option 1: Playful comparison
+  "One of these aircraft is not like the others... but it makes the Kessel Run in 12 parsecs!",
+  
+  # Option 2: Data-focused with humor
+  "Wide-body workhorses dominate the Atlantic — though one craft prefers hyperspace.",
+  
+  # Option 3: Professional with Easter egg
+  "Long-haul aircraft dominating Brazil-Europe routes (+ one intergalactic outlier).",
+  
+  # Option 4: Star Wars reference
+  "She may not look like much, but the Falcon's got it where it counts — along with some serious competition.",
+  
+  # Option 5: Simple and clean
+  "The aircraft connecting two continents across the Atlantic (and one from a galaxy far, far away)."
+)
+
+# Choose your subtitle
+our_subtitle <- subtitle_options[2]  # Change number to pick different option
+
+our_title <- "<span style='font-size:30pt'><strong>Chart-Challenge Day 10</strong></span><br>**The Workhorses of Long Distance Flying Between Europe and Brazil in 2025**"
+
+our_subtitle <- "Top share of flights by aircraft type operated. Wide-body workhorses dominate the Atlantic — though one craft prefers hyperspace. Aircraft images represent relative fleet share on Brazil-Europe routes. <br>The Millennium Falcon's hyperdrive capabilities and service frequency remain unverified by aviation authorities."
+
+our_caption <- "credit: Millennium Falcon image by Jean photosstock from Pixabay<br>DECEA Performance Section & EUROCONTROL PRU"
+
+# Final plot with annotations
+p_final <- p +
+  
+  with_outer_glow(
+    geom_image(
+      data = fleet |> filter(is_falcon),
+      aes(x = image_x, y = y_numeric, image = path),
+      size = 0.4
+    ),
+    colour = "#FFD166",
+    sigma = 40
+  ) +
+  
+  # Main annotation for Falcon
+  annotate(
+    "text",
+    x = 1.18,
+    y = 5,  #"Millennium\nFalcon",
+    label = "Hyperdrive engaged\ntoo fast to be counted!",
+    family = "orbitron",
+    size = 12,
+    colour = "black",
+    lineheight = 0.3
+  ) +
+  
+  # Additional commentary options (uncomment ones you like):
+  
+  # Comment 1: Point to top aircraft
+  annotate(
+    "text",
+    x = 0.55,
+    y = "A339",
+    label = "← Leading the pack:\nAirbus A330neo",
+    family = "space",
+    size = 12,
+    #colour = "grey40",
+    hjust = 0,
+    lineheight = 0.3
+  ) +
+  
+  # Comment 2: Note about Boeing/Airbus split
+  annotate(
+    "segment",
+    x = 0.28, xend = 0.32,
+    y = 6.5, yend = 6.5,
+    colour = "grey50",
+    linetype = "dashed"
+  ) +
+  annotate(
+    "text",
+    x = 0.6,
+    y = 3,
+    label = "Boeing vs Airbus:\nNearly balanced",
+    family = "space",
+    size = 16,
+    colour = "grey40",
+    hjust = 0.5,
+    lineheight = 0.3
+  ) +
+  
+  labs(
+    title = our_title, 
+    subtitle = our_subtitle, 
+    caption = our_caption,
+    y = NULL, 
+    x = NULL
+  ) +
+  
+  theme_clean(base_size = 24) +
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(3),
+      lineheight = 0.2,
+      family = "orbitron",
+      margin = margin(b = 10)
+    ),
+    plot.title.position = "plot",
+    
+    plot.subtitle = element_textbox_simple(
+      size = rel(2), 
+      family = "space",
+      margin = margin(b = 20)
+      ,lineheight = 0.2
+    ),
+    
+    plot.caption = element_textbox_simple(
+      size = rel(0.7),
+      family = "space",
+      margin = margin(t = 15),
+      lineheight = 1.2
+    ),
+    
+    axis.text.y = element_text(
+      size = rel(1.5), 
+      family = "space",
+      lineheight = 0.3   # tighten spacing
+     # ,padding = margin(0, 0, 0, 0)
+    ),
+    
+    axis.text.x = element_text(
+      size = rel(1.5), 
+      family = "space"
+    ),
+    
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  )
+
+
+
+p_final
+```
+
+ggsave("day10-popculture.png", width = mywidth, height = myheight, dpi = mydpi)
+
+
+
+
+```{r}
+fleet <- fleet |>
+  mutate(
+    TYPE = fct_recode(TYPE, "Millennium\nFalcon" = "Millennium Falcon"),
+    TYPE = factor(TYPE, levels = rev(unique(TYPE))),
+    y = as.numeric(TYPE),
+
+    path = case_when(
+      TYPE == "Millennium\nFalcon" ~ "./aircraft_silhouettes/jean52photosstock-ufo-6054792.png",
+      TYPE == "A339" ~ "./aircraft_silhouettes/A339_side.png",
+      TYPE == "A332" ~ "./aircraft_silhouettes/A332_side.png",
+      TYPE == "A359" ~ "./aircraft_silhouettes/A350-900.png",
+      TYPE == "B77W" ~ "./aircraft_silhouettes/B777-9_side.png",
+      TYPE == "B772" ~ "./aircraft_silhouettes/B772_side.png",
+      TYPE == "B789" ~ "./aircraft_silhouettes/B787_side.png",
+      TRUE ~ NA_character_
+    ),
+
+    image_x = ifelse(is_falcon, SHARE + 0.18, SHARE + 0.11),
+    share_label = ifelse(is_falcon, "", paste0(round(SHARE * 100, 1), "%"))
+  )
+```
+
+```{r}
+p <- ggplot(fleet) +
+
+  geom_segment(
+    aes(
+      x = 0,
+      xend = ifelse(is_falcon, dot_start, SHARE),
+      y = y,
+      yend = y,
+      colour = is_falcon
+    ),
+    linewidth = lolli_line
+  ) +
+
+  geom_segment(
+    data = subset(fleet, is_falcon),
+    aes(x = dot_start, xend = SHARE, y = y, yend = y),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) +
+
+  geom_text(
+    data = subset(fleet, !is_falcon),
+    aes(x = 0.02, y = y, label = share_label),
+    hjust = 0,
+    size = 6,
+    family = "space",
+    colour = "grey30",
+    fontface = "bold"
+  ) +
+
+  geom_image(
+    data = subset(fleet, !is_falcon),
+    aes(
+      x = image_x,
+      y = ifelse(TYPE == "A359", y + 0.2, y),
+      image = path
+    ),
+    size = 0.4,
+    asp = 1
+  ) +
+
+  scale_x_continuous(
+    limits = c(0, 1.6),
+    expand = c(0, NA),
+    labels = percent_format(),
+    breaks = c(0, 0.25, 0.5, 0.75, 1)
+  ) +
+
+  scale_y_continuous(
+    breaks = fleet$y,
+    labels = levels(fleet$TYPE),
+    expand = expansion(add = 0.6)
+  ) +
+
+  scale_colour_manual(values = c("grey80", "gold"), guide = "none") +
+
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+```
+
+```{r}
+p_falcon <- p +
+
+  with_outer_glow(
+    geom_image(
+      data = subset(fleet, is_falcon),
+      aes(x = image_x, y = y, image = path),
+      size = 0.4
+    ),
+    colour = "#FFD166",
+    sigma = 40
+  ) +
+
+  annotate(
+    "text",
+    x = 1.18,
+    y = fleet$y[fleet$is_falcon],
+    label = "Hyperdrive engaged\ntoo fast to be counted!",
+    family = "orbitron",
+    size = 12,
+    lineheight = 0.9
+  )
+```
+
+```{r}
+p_final <- p_falcon +
+  theme_clean(base_size = 24) +
+  
+  # ---------------- text ----------------------------------
+  labs(
+    title = our_title, subtitle = our_subtitle, caption = our_caption
+  )
+  
+  
+  # ---------------- theme tweaks ---------------------------
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(3),
+      lineheight = 0.2,
+      family = "orbitron",
+      margin = margin(b = 10)
+    ),
+    plot.title.position = "plot",
+    
+    plot.subtitle = element_textbox_simple(
+      size = rel(2), 
+      family = "space",
+      margin = margin(b = 20)
+      ,lineheight = 0.2
+    ),
+    
+    plot.caption = element_textbox_simple(
+      size = rel(0.7),
+      family = "space",
+      margin = margin(t = 15),
+      lineheight = 1.2
+    ),
+    
+    axis.text.y = element_text(
+      size = rel(1.5), 
+      family = "space",
+      lineheight = 0.3   # tighten spacing
+     # ,padding = margin(0, 0, 0, 0)
+    ),
+    
+    axis.text.x = element_text(
+      size = rel(1.5), 
+      family = "space"
+    ),
+    
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  )
+
+p_final 
+```
+
+
+```{r}
+## ============================================================
+## DATA PREP — single y-axis (numeric), stable ordering
+## ============================================================
+
+fleet <- fleet |>
+  mutate(
+    TYPE = fct_recode(TYPE, "Millennium\nFalcon" = "Millennium Falcon"),
+    TYPE = factor(TYPE, levels = rev(unique(TYPE))),
+    y = as.numeric(TYPE),
+
+    path = case_when(
+      TYPE == "Millennium\nFalcon" ~ "./aircraft_silhouettes/jean52photosstock-ufo-6054792.png",
+      TYPE == "A339" ~ "./aircraft_silhouettes/A339_side.png",
+      TYPE == "A332" ~ "./aircraft_silhouettes/A332_side.png",
+      TYPE == "A359" ~ "./aircraft_silhouettes/A350-900.png",
+      TYPE == "B77W" ~ "./aircraft_silhouettes/B777-9_side.png",
+      TYPE == "B772" ~ "./aircraft_silhouettes/B772_side.png",
+      TYPE == "B789" ~ "./aircraft_silhouettes/B787_side.png",
+      TRUE ~ NA_character_
+    ),
+
+    image_x = ifelse(is_falcon, SHARE + 0.22, SHARE + 0.14),
+    share_label = ifelse(is_falcon, "", paste0(round(SHARE * 100, 1), "%"))
+  )
+
+
+## ============================================================
+## BASE PLOT
+## ============================================================
+
+p <- ggplot(fleet) +
+
+  # Main lollipop sticks
+  geom_segment(
+    aes(
+      x = 0,
+      xend = ifelse(is_falcon, dot_start, SHARE),
+      y = y,
+      yend = y,
+      colour = is_falcon
+    ),
+    linewidth = lolli_line
+  ) +
+
+  # Dotted Falcon extension
+  geom_segment(
+    data = subset(fleet, is_falcon),
+    aes(x = dot_start, xend = SHARE, y = y, yend = y),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) +
+
+  # Share labels
+  geom_text(
+    data = subset(fleet, !is_falcon),
+    aes(x = 0.02, y = y, label = share_label),
+    hjust = 0,
+    size = 6,
+    family = "space",
+    colour = "grey30",
+    fontface = "bold"
+  ) +
+
+  # Aircraft images (non-Falcon)
+  geom_image(
+    data = subset(fleet, !is_falcon),
+    aes(
+      x = image_x,
+      y = ifelse(TYPE == "A359", y + 0.2, y),
+      image = path
+    ),
+    size = 0.4,
+    asp = 1
+  ) +
+
+  scale_x_continuous(
+    limits = c(0, 1.6),
+    expand = c(0, NA),
+    labels = percent_format(),
+    breaks = c(0, 0.25, 0.5, 0.75, 1)
+  ) +
+
+  scale_y_continuous(
+    breaks = fleet$y,
+    labels = levels(fleet$TYPE),
+    expand = expansion(add = 0.6),
+    trans  = "reverse"
+  ) +
+  
+  scale_colour_manual(values = c("grey80", "gold"), guide = "none") +
+
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+
+
+## ============================================================
+## FINAL ANNOTATED PLOT
+## ============================================================
+
+p_final <- p +
+
+  # Falcon with glow
+  with_outer_glow(
+    geom_image(
+      data = subset(fleet, is_falcon),
+      aes(x = image_x, y = y, image = path),
+      size = 0.4
+    ),
+    colour = "#FFD166",
+    sigma = 40
+  ) +
+
+  # Falcon annotation
+  annotate(
+    "text",
+    x = 1.18,
+    y = fleet$y[fleet$is_falcon],
+    label = "Hyperdrive engaged\ntoo fast to be counted!",
+    family = "orbitron",
+    size = 12,
+    colour = "black",
+    lineheight = 0.9
+  ) +
+
+  # Airbus leader callout
+  annotate(
+    "text",
+    x = 0.55,
+    y = fleet$y[fleet$TYPE == "A339"],
+    label = "← Leading the pack:\nAirbus A330neo",
+    family = "space",
+    size = 12,
+    hjust = 0,
+    lineheight = 0.9
+  ) +
+
+  # Boeing vs Airbus note
+  annotate(
+    "segment",
+    x = 0.28, xend = 0.32,
+    y = 6.5, yend = 6.5,
+    colour = "grey50",
+    linetype = "dashed"
+  ) +
+  annotate(
+    "text",
+    x = 0.6,
+    y = 3,
+    label = "Boeing vs Airbus:\nNearly balanced",
+    family = "space",
+    size = 16,
+    colour = "grey40",
+    hjust = 0.5,
+    lineheight = 0.9
+  ) +
+
+  labs(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    x = NULL,
+    y = NULL
+  ) +
+
+  theme_clean(base_size = 24) +
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(3),
+      family = "orbitron",
+      lineheight = 0.2,
+      margin = margin(b = 10)
+    ),
+    plot.title.position = "plot",
+
+    plot.subtitle = element_textbox_simple(
+      size = rel(2),
+      family = "space",
+      lineheight = 0.3,
+      margin = margin(b = 20)
+    ),
+
+    plot.caption = element_textbox_simple(
+      size = rel(0.7),
+      family = "space",
+      lineheight = 1.4,
+      margin = margin(t = 15)
+    ),
+
+    axis.text.y = element_text(
+      size = rel(1.5),
+      family = "space",
+      lineheight = 0.3
+    ),
+
+    axis.text.x = element_text(
+      size = rel(1.5),
+      family = "space"
+    ),
+
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  )
+
+
+## ============================================================
+## RENDER
+## ============================================================
+
+p_final
+```
+
+
+## final version
+
+
+```{r}
+## ============================================================
+## DATA PREP — FACTOR Y ONLY (NO NUMERIC Y ANYWHERE)
+## ============================================================
+
+fleet <- fleet |>
+  mutate(
+    TYPE = fct_recode(TYPE, "Millennium\nFalcon" = "Millennium Falcon"),
+    TYPE = factor(TYPE, levels = rev(unique(TYPE))),
+
+    path = case_when(
+      TYPE == "Millennium\nFalcon" ~ "./aircraft_silhouettes/jean52photosstock-ufo-6054792.png",
+      TYPE == "A339" ~ "./aircraft_silhouettes/A339_side.png",
+      TYPE == "A332" ~ "./aircraft_silhouettes/A332_side.png",
+      TYPE == "A359" ~ "./aircraft_silhouettes/A350-900.png",
+      TYPE == "B77W" ~ "./aircraft_silhouettes/B777-9_side.png",
+      TYPE == "B772" ~ "./aircraft_silhouettes/B772_side.png",
+      TYPE == "B789" ~ "./aircraft_silhouettes/B787_side.png",
+      TRUE ~ NA_character_
+    ),
+
+    image_x = ifelse(is_falcon, SHARE + 0.22, SHARE + 0.14),
+    share_label = ifelse(is_falcon, "", paste0(round(SHARE * 100, 1), "%"))
+  )
+
+
+## ============================================================
+## BASE PLOT
+## ============================================================
+
+p_base <- ggplot(fleet) +
+
+  geom_segment(
+    aes(
+      x = 0,
+      xend = ifelse(is_falcon, dot_start, SHARE),
+      y = TYPE,
+      yend = TYPE,
+      colour = is_falcon
+    ),
+    linewidth = lolli_line
+  ) +
+
+  geom_segment(
+    data = subset(fleet, is_falcon),
+    aes(x = dot_start, xend = SHARE, y = TYPE, yend = TYPE),
+    linewidth = lolli_line,
+    colour = "gold",
+    linetype = "dotted"
+  ) +
+
+  geom_text(
+    data = subset(fleet, !is_falcon),
+    aes(x = 0.02, y = TYPE, label = share_label),
+    hjust = 0,
+    size = 8,
+    family = "space",
+    #colour = "grey30",
+    fontface = "bold"
+  ) +
+
+  geom_image(
+    data = subset(fleet, !is_falcon),
+    aes(
+      x = image_x,
+      y = TYPE,
+      image = path
+    ),
+    size = 0.4,
+    asp = 1
+  ) +
+
+  scale_x_continuous(
+    limits = c(0, 1.6),
+    expand = c(0, NA),
+    labels = percent_format(),
+    breaks = c(0, 0.25, 0.5, 0.75, 1)
+  ) +
+
+  scale_y_discrete(expand = expansion(add = 0.6)) +
+
+  scale_colour_manual(values = c("grey80", "gold"), guide = "none") +
+
+  canvas(width = mywidth, height = myheight, dpi = mydpi)
+
+
+## ============================================================
+## FINAL ANNOTATIONS
+## ============================================================
+
+p_falcon <- p_base +
+
+  with_outer_glow(
+    geom_image(
+      data = subset(fleet, is_falcon),
+      aes(x = image_x - 0.22, y = TYPE, image = path),
+      size = 0.4
+    ),
+    colour = "#FFD166",
+    sigma = 40
+    ,nudge_y = 1.5
+  ) +
+
+  annotate(
+    "text",
+    x = 1.25,
+    y = "A339", #"Millennium\nFalcon",
+    label = "Hyperdrive engaged\ntoo fast to be counted!",
+    family = "orbitron",
+    size = 12,
+    lineheight = 0.3
+  )
+
+p_final <- p_falcon +
+
+  annotate(
+    "text",
+    x = 0.5,
+    y = "A339",
+    label = "← Leading the pack:\nAirbus A330neo",
+    family = "space",
+    size = 14,
+    hjust = 0,
+    lineheight = 0.3
+  ) +
+
+  annotate(
+    "segment",
+    x = 0.28, xend = 0.32,
+    y = "B772", yend = "B772",
+    linetype = "dashed"
+  ) +
+
+  annotate(
+    "text",
+    x = 0.9,
+    y = "A359",
+    label = "Boeing vs Airbus:\nNearly balanced",
+    family = "space",
+    size = 16,
+    hjust = 0.5,
+    lineheight = 0.3
+  ) +
+
+  labs(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    x = NULL,
+    y = NULL
+  ) +
+
+  theme_clean(base_size = 24) +
+  theme(
+    plot.title = element_textbox_simple(
+      size = rel(3),
+      family = "orbitron",
+      lineheight = 0.35,
+      margin = margin(b = 10)
+    ),
+    plot.title.position = "plot",
+
+    plot.subtitle = element_textbox_simple(
+      size = rel(2),
+      family = "space",
+      lineheight = 0.35,
+      margin = margin(b = 15)
+    ),
+
+    plot.caption = element_textbox_simple(
+      size = rel(1.3),
+      family = "space",
+      lineheight = 0.4,
+      margin = margin(t = 15)
+    ),
+    plot.caption.position = "plot",
+
+    axis.text.y = element_text(
+      size = rel(1.5),
+      family = "space",
+      lineheight = 0.3
+    ),
+
+    axis.text.x = element_text(
+      size = rel(1.5),
+      family = "space"
+    ),
+
+    plot.margin = margin(t = 10, r = 20, b = 10, l = 20)
+  )
+
+
+## ============================================================
+## RENDER
+## ============================================================
+
+p_final
+```
+
+
