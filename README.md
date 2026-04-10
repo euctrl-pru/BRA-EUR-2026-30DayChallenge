@@ -71,3 +71,19 @@ Links are depicted with *geom_arc()*.
 The annotations use the standard tools provided by {ggtext} and {showtext}.
 
 ![Day-08 contribution](figures/day08-circular.png)
+
+### Day 9 - "multi-scale"
+
+![Day-09 ](figures/day09-lorenz.png)
+
+### Day 10 - "pop-culture"
+
+Thread-wise this was one of the most difficult graphics so far. It took us quite a while to come up with an idea.    
+The grpah shows the share of aircraft types operated in 2025 between Brazil and Europe.
+It shows the main widebody working horses ... and adds a twist in terms of the Millennium Falcon!
+
+* barchart of shares as "pseudo-lollipop"
+* aircraft icons/images integrated with geom_image()
+* initial use of google fonts to underscore the theme/message
+
+![Day-10 pop-culture](figures/day10-popculture-final.png)
