@@ -87,3 +87,16 @@ It shows the main widebody working horses ... and adds a twist in terms of the M
 * initial use of google fonts to underscore the theme/message
 
 ![Day-10 pop-culture](figures/day10-popculture-final.png)
+
+### Day 12 - "flow"
+
+For Day 12 we used a parallel-sets style flow chart to show how air transport services between Europe and Brazil in 2025 concentrate around a relatively small study network. The final chart highlights that 74% of services connect study airports at both ends, with Lisbon, Madrid, and Paris CDG leading on the European side and Guarulhos, Galeao, and Campinas absorbing the largest shares in Brazil.
+
+Conceptual building blocks
+
+* `geom_parallel_sets()` and `geom_parallel_sets_axes()` from `{ggforce}` for the flow geometry
+* airport aggregation into study airports plus `Other European airports` / `Other Brazilian airports`
+* `{ggtext}` and `{ggview}` for the final title, subtitle, caption, and output sizing
+* outside airport labels with `{ggrepel}` and in-block service counts for the larger nodes
+
+![Day-12 flow](figures/day12-flow.png)

@@ -1,0 +1,823 @@
+---
+title: "Day 12 - Flowing Data"
+format: html
+---
+
+## Aim
+
+For Day 12 we wanted to turn the 2025 Europe-Brazil traffic network into a readable flow chart that highlights how strongly the market is concentrated around the study airports. The challenge was not just getting `geom_parallel_sets()` to work, but making the result legible enough for a challenge submission with meaningful titles, airport labels, and a polished export.
+
+Packages used in the process:
+
+* `{ggplot2}` and `{ggforce}` for the parallel-sets geometry
+* `{dplyr}` and `{tidyr}` for reshaping and aggregation
+* `{ggtext}` for title, subtitle, and caption blocks
+* `{ggview}` to align the RStudio preview and saved output
+* `{ggrepel}` for the outside-label refinement in the final proposal
+
+## Setup And First Test
+
+```{r}
+#| label: setup
+library(readr)
+library(dplyr)
+library(tidyr)
+
+# visualisation
+library(ggplot2)
+library(ggforce)   # parallel sets  --> alluvial style
+```
+
+```{r}
+flows_long <- read_csv(here::here("data","BRA-EUR-conns-parallel.csv"), show_col_types = FALSE)
+```
+
+```{r}
+ggplot(flows_long, aes(x = x, id = id, split = y, value = DEPS)) +
+geom_parallel_sets(aes(fill = ORIG_GROUP), alpha = 0.6, axis.width = 0.1) +
+geom_parallel_sets_axes(axis.width = 0.2, fill = "gray90") +
+geom_parallel_sets_labels(angle = 0, size = 3, colour = "black") +
+scale_x_discrete(labels = c("Origin", "Destination")) +
+scale_fill_manual(values = c("Study" = "blue", "Non-Study" = "lightblue")) +
+theme_minimal() +
+labs(
+# title = "Flight Flows from Europe to Brazil (Study vs Non-Study)",
+# subtitle = "Grouped by Origin and Destination Study Status",
+y = "Number of Departures", x = element_blank(), fill = element_blank()
+) +
+theme(legend.position = "inside", legend.position.inside = c(0.1,0.1))
+```
+
+## Data Preparation
+
+We then switched from the small CSV prototype to the full 2025 flow dataset and created the study / non-study grouping logic used throughout the rest of the file.
+
+```{r}
+#' helper function to assign region/study label based on ICAO or portions thereof
+#' 
+assign_region <- function(
+      icao      # vector of ICAO location indicators
+    , prefixes  # combinations of Letters looking for, including full ICAO
+    , label = "Study"        # desired label
+    , other = NA_character_  # alternative label, default NA
+    ) {
+    stopifnot(is.character(icao), is.character(prefixes))
+    
+    pattern <- paste0("^(", paste(prefixes, collapse = "|"), ")")
+    
+    ifelse(grepl(pattern, icao), label, other)
+}
+
+pattern_eur <- c("E","L","BI")
+pattern_bra <- c("SB","SD","SI","SJ","SN","SS", "SW")
+
+# study airports
+bra_apts <- c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG")
+eur_apts <- c("EGLL","EGKK","EHAM","EDDF","EDDM","LSZH","LFPG","LEMD","LEBL","LPPT","LTFM","LGAV")
+```
+
+get NM flights
+
+```{r}
+rq <- arrow::read_parquet("./data/EUR-adep-ades-2025.parquet") |> 
+  mutate(
+    ORIG_REG = assign_region(ADEP, c(pattern_eur,"AFIL"), "EUR")
+  , DEST_REG = assign_region(ADES, pattern_bra,"BRA")) |> 
+  filter(ORIG_REG == "EUR", DEST_REG == "BRA")
+
+# assign study label
+rq <- rq |> 
+  mutate(
+    ORIG_GROUP = assign_region(ADEP, eur_apts, "study", "non-study")
+  , DEST_GROUP = assign_region(ADES, bra_apts, "study", "non-study")
+  )
+```
+
+## Reshaping Notes
+
+Before moving on to the final design, it was useful to keep a short reminder of how `geom_parallel_sets()` expects its data.
+
+Short explanation (x / id / split)
+
+id
+Identifies one flow unit.
+→ One ADEP–ADES pair (or aggregated version of it).
+→ Must be constant across axes.
+
+x
+Identifies the axis position.
+→ "Origin" vs "Destination" (factor, ordered).
+
+split (your y)
+The category on each axis.
+→ At Origin: ORIG_GROUP
+→ At Destination: DEST_GROUP
+
+value
+Flow thickness.
+→ FLTS
+
+Each flow therefore becomes two rows:
+one at Origin, one at Destination, sharing the same id.
+
+
+```{r}
+flows_long1 <- rq |>
+    mutate(
+        id = row_number()
+    ) |>
+    select(id, FLTS, ORIG_GROUP, DEST_GROUP) |>
+    pivot_longer(
+        cols = c(ORIG_GROUP, DEST_GROUP),
+        names_to = "x",
+        values_to = "y"
+    ) |>
+    mutate(
+        x = recode(
+            x,
+            ORIG_GROUP = "Origin",
+            DEST_GROUP = "Destination"
+        ),
+        x = factor(x, levels = c("Origin", "Destination"))
+    )
+```
+
+```{r}
+ggplot(flows_long1, aes(x = x, id = id, split = y, value = FLTS)) +
+  geom_parallel_sets(alpha = 0.6, axis.width = 0.1) +
+  geom_parallel_sets_axes(axis.width = 0.2, fill = "gray90") +
+  geom_parallel_sets_labels(angle = 0, size = 3, colour = "black") +
+  
+  scale_x_discrete(labels = c("Origin", "Destination")) +
+  #scale_fill_manual(values = c("Study" = "blue", "Non-Study" = "lightblue")) +
+  theme_minimal() +
+  labs(
+# title = "Flight Flows from Europe to Brazil (Study vs Non-Study)",
+# subtitle = "Grouped by Origin and Destination Study Status",
+    y = "Number of Departures", x = element_blank(), fill = element_blank()
+) +
+  theme(legend.position = "inside", legend.position.inside = c(0.1,0.1))
+```
+
+## Collapsing The Network
+
+The next step was to collapse the long tail of small airports into grouped buckets while preserving the study-airport structure that matters for the story.
+
+```{r}
+threshold <- 50
+
+rq_collapsed <- rq |>
+  mutate(
+    ORIG_NODE = case_when(
+      ORIG_GROUP == "study" ~ ADEP,
+      ORIG_GROUP != "study" & FLTS >= threshold ~ ADEP,
+      ORIG_GROUP != "study" & ORIG_REG == "EUR" ~ "Other European",
+      TRUE ~ "Other Brazilian"
+    ),
+    DEST_NODE = case_when(
+      DEST_GROUP == "study" ~ ADES,
+      DEST_GROUP != "study" & FLTS >= threshold ~ ADES,
+      DEST_GROUP != "study" & DEST_REG == "BRA" ~ "Other Brazilian",
+      TRUE ~ "Other European"
+    )
+  )
+
+flows_long <- rq_collapsed |>
+  group_by(ORIG_NODE, DEST_NODE) |>
+  summarise(
+    FLTS = sum(FLTS),
+    .groups = "drop"
+  ) |>
+  mutate(id = row_number()) |>
+  pivot_longer(
+    cols = c(ORIG_NODE, DEST_NODE),
+    names_to = "x",
+    values_to = "y"
+  ) |>
+  mutate(
+    x = recode(
+      x,
+      ORIG_NODE = "Origin",
+      DEST_NODE = "Destination"
+    ),
+    x = factor(x, levels = c("Origin", "Destination"))
+  )
+```
+
+```{r}
+ggplot(flows_long, aes(x = x, id = id, split = y, value = FLTS)) +
+#geom_parallel_sets(aes(fill = ORIG_NODE), alpha = 0.6, axis.width = 0.1) +
+geom_parallel_sets_axes(axis.width = 0.2, fill = "gray90") +
+geom_parallel_sets_labels(angle = 0, size = 3, colour = "black") +
+scale_x_discrete(labels = c("Origin", "Destination")) +
+scale_fill_manual(values = c("Study" = "blue", "Non-Study" = "lightblue")) +
+theme_minimal() +
+labs(
+# title = "Flight Flows from Europe to Brazil (Study vs Non-Study)",
+# subtitle = "Grouped by Origin and Destination Study Status",
+y = "Number of Departures", x = element_blank(), fill = element_blank()
+) +
+theme(legend.position = "inside", legend.position.inside = c(0.1,0.1))
+```
+
+```{r}
+rq_collapsed <- rq_collapsed |>
+  mutate(
+    FLOW_CLASS = case_when(
+      ORIG_GROUP == "study" & DEST_GROUP == "study" ~ "Study–Study",
+      ORIG_GROUP == "study" | DEST_GROUP == "study" ~ "Study–Non-Study",
+      TRUE                                          ~ "Non-Study–Non-Study"
+    )
+  )
+
+flows_long <- rq_collapsed |>
+  group_by(ORIG_NODE, DEST_NODE) |>
+  summarise(
+    FLTS = sum(FLTS),
+    .groups = "drop"
+  ) |>
+  mutate(id = row_number()) |>
+  transmute(
+    id,
+    value = FLTS,
+    x_origin = 1,
+    x_dest   = 2,
+    y_origin = ORIG_NODE,
+    y_dest   = DEST_NODE
+  ) |>
+  pivot_longer(
+    cols = c(x_origin, x_dest, y_origin, y_dest),
+    names_to = c(".value", "axis"),
+    names_pattern = "(x|y)_(origin|dest)"
+  ) |>
+  mutate(
+    x = ifelse(axis == "origin", 1, 2)
+  ) |>
+  select(id, x, y, value)
+```
+
+```{r}
+threshold <- 60
+
+rq_collapsed <- rq |>
+  mutate(
+    ORIG_NODE = case_when(
+      ORIG_GROUP == "study" ~ ADEP,
+      ORIG_GROUP != "study" & FLTS >= threshold ~ ADEP,
+      ORIG_GROUP != "study" & ORIG_REG == "EUR" ~ "Other European",
+      TRUE ~ "Other Brazilian"
+    ),
+    DEST_NODE = case_when(
+      DEST_GROUP == "study" ~ ADES,
+      DEST_GROUP != "study" & FLTS >= threshold ~ ADES,
+      DEST_GROUP != "study" & DEST_REG == "BRA" ~ "Other Brazilian",
+      TRUE ~ "Other European"
+    )
+  )
+
+rq_collapsed <- rq_collapsed |>
+  mutate(
+    FLOW_CLASS = case_when(
+      ORIG_GROUP == "study" & DEST_GROUP == "study" ~ "Study–Study",
+      ORIG_GROUP == "study" | DEST_GROUP == "study" ~ "Study–Non-Study",
+      TRUE                                          ~ "Non-Study–Non-Study"
+    )
+  )
+
+flows_long <- rq_collapsed |>
+  group_by(ORIG_NODE, DEST_NODE, FLOW_CLASS) |>
+  summarise(
+    FLTS = sum(FLTS),
+    .groups = "drop"
+  ) |>
+  mutate(id = row_number()) |>
+  transmute(
+    id,
+    value = FLTS,
+    FLOW_CLASS,
+    x_origin = 1,
+    x_dest   = 2,
+    y_origin = ORIG_NODE,
+    y_dest   = DEST_NODE
+  ) |>
+  pivot_longer(
+    cols = c(x_origin, x_dest, y_origin, y_dest),
+    names_to = c(".value", "axis"),
+    names_pattern = "(x|y)_(origin|dest)"
+  ) #|>
+#  select(id, x, y, value, FLOW_CLASS)
+
+# add label for fill of axis
+flows_long <- flows_long |>
+  mutate(
+    AXIS_FILL = ifelse(
+      y %in% c(bra_apts, eur_apts),
+      "study",
+      "non-study"
+    ),
+    FLOW_FILL = recode(
+      FLOW_CLASS,
+      "Study–Study"         = "blue",
+      "Study–Non-Study"     = "lightblue",
+      "Non-Study–Non-Study" = "grey70"
+    ),
+    AXIS_FILL_COL = recode(
+      AXIS_FILL,
+      "study"     = "yellow",
+      "non-study" = "grey70"
+    )
+  )
+
+```
+
+```{r}
+ggplot(
+  flows_long,
+  aes(
+    x     = x,
+    id    = id,
+    split = y,
+    value = value
+  )
+) +
+  # ------------------ the flow(s) ----------------------------
+  geom_parallel_sets(
+    aes(fill = FLOW_FILL),
+    alpha = 0.6,
+    axis.width = 0.1
+  ) +
+  # ------------------- axes "origin" & destination boxes -----
+  geom_parallel_sets_axes(
+    axis.width = 0.2,
+    aes(fill = AXIS_FILL_COL),
+    colour = "grey40"
+  ) +
+  scale_fill_identity() +
+
+  geom_parallel_sets_labels(
+    size = 3,
+    colour = "black",
+    angle = 0
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = NULL # c("Origin", "Destination")
+  ) +
+  labs(
+    x = NULL,
+    y = NULL        # "Number of departures"
+  ) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),
+    axis.text.y = element_blank(),
+    axis.ticks.y = element_blank()
+  )
+```
+
+## Styling The Flow And Axis Fills
+
+This section contains the intermediate solution where the flow colors and axis-box colors were handled separately before we moved to the final outside-label proposal.
+
+## Final Version
+
+From here onward the focus shifts to the challenge submission itself: stronger storytelling, readable airport naming, a consistent caption block, and a plot size that behaves the same in the viewer and on export.
+
+```{r}
+library(ggtext)
+library(ggview)
+library(scales)
+
+plot_width  <- 10
+plot_height <- 8
+plot_dpi    <- 300
+
+col_study <- "#7DB7E8"
+col_mixed <- "#B9D9F3"
+col_non   <- "grey70"
+
+airport_names <- c(
+  EGLL = "Heathrow",
+  EGKK = "Gatwick",
+  EHAM = "Amsterdam",
+  EDDF = "Frankfurt",
+  EDDM = "Munich",
+  ELLX = "Luxembourg",
+  LSZH = "Zurich",
+  LFPG = "Paris CDG",
+  LEMD = "Madrid",
+  LEBL = "Barcelona",
+  LPPT = "Lisbon",
+  LPPR = "Porto",
+  LTFM = "Istanbul",
+  LIMC = "Milan",
+  LIRF = "Rome",
+  LGAV = "Athens",
+  SBBE = "Belem",
+  SBBR = "Brasilia",
+  SBGR = "Guarulhos",
+  SBSP = "Congonhas",
+  SBKP = "Campinas",
+  SBRJ = "Santos Dumont",
+  SBGL = "Galeao",
+  SBCF = "Belo Horizonte",
+  SBFZ = "Fortaleza",
+  SBSV = "Salvador",
+  SBPA = "Porto Alegre",
+  SBCT = "Curitiba",
+  SBRF = "Recife",
+  SBEG = "Manaus"
+)
+
+format_node_label <- function(code, flights) {
+  airport_name <- dplyr::recode(code, !!!airport_names, .default = code)
+  is_named <- code %in% names(airport_names)
+
+  case_when(
+    code == "Other European" ~ "Other European\nairports",
+    code == "Other Brazilian" ~ "Other Brazilian\nairports",
+    !is_named ~ code,
+    TRUE ~ paste0(airport_name, "\n(", code, ")")
+  )
+}
+
+node_totals <- bind_rows(
+  rq_collapsed |>
+    count(node = ORIG_NODE, wt = FLTS, name = "node_flights") |>
+    mutate(x = 1),
+  rq_collapsed |>
+    count(node = DEST_NODE, wt = FLTS, name = "node_flights") |>
+    mutate(x = 2)
+)
+
+flow_summary <- rq_collapsed |>
+  count(FLOW_CLASS, wt = FLTS, name = "flights") |>
+  mutate(share = flights / sum(flights))
+
+total_flights <- sum(flow_summary$flights)
+study_share <- flow_summary |>
+  filter(FLOW_CLASS == "Study–Study") |>
+  pull(share)
+
+sbgr_share <- node_totals |>
+  filter(x == 2, node == "SBGR") |>
+  summarise(share = node_flights / total_flights) |>
+  pull(share)
+
+flows_final <- rq_collapsed |>
+  group_by(ORIG_NODE, DEST_NODE, FLOW_CLASS) |>
+  summarise(
+    FLTS = sum(FLTS),
+    .groups = "drop"
+  ) |>
+  mutate(
+    id = row_number(),
+    value = FLTS,
+    x_origin = 1,
+    x_dest   = 2,
+    y_origin = ORIG_NODE,
+    y_dest   = DEST_NODE
+  ) |>
+  pivot_longer(
+    cols = c(x_origin, x_dest, y_origin, y_dest),
+    names_to = c(".value", "axis"),
+    names_pattern = "(x|y)_(origin|dest)"
+  ) |>
+  left_join(node_totals, by = c("x", "y" = "node")) |>
+  mutate(
+    AXIS_FILL = ifelse(y %in% c(bra_apts, eur_apts), "study", "non-study"),
+    FLOW_FILL = recode(
+      FLOW_CLASS,
+      "Study–Study"         = col_study,
+      "Study–Non-Study"     = col_mixed,
+      "Non-Study–Non-Study" = col_non
+    ),
+    AXIS_FILL_COL = recode(
+      AXIS_FILL,
+      "study"     = col_study,
+      "non-study" = "grey85"
+    ),
+    y_label = format_node_label(y, node_flights)
+  )
+
+axis_levels <- flows_final |>
+  distinct(x, y, y_label) |>
+  arrange(x, y) |>
+  pull(y_label)
+
+flows_final <- flows_final |>
+  mutate(y_label = factor(y_label, levels = axis_levels))
+
+our_title <- "<span style='font-size:12pt'><strong>Chart-Challenge Day 12 - Flow</strong></span><br><strong>Europe-Brazil traffic is concentrated in a small study network</strong>"
+
+our_subtitle <- paste0(
+  percent(study_share, accuracy = 1), " of ",
+  comma(total_flights), " 2025 flights connect study airports at both ends. ",
+  "Lisbon, Madrid and Paris CDG feed the largest European volumes, while ",
+  "Guarulhos alone absorbs ", percent(sbgr_share, accuracy = 1), " of arrivals. ",
+  "Airport names are expanded where box size permits; counts highlight the biggest nodes."
+)
+
+our_caption <- "DECEA Performance Section & EUROCONTROL PRU"
+
+eu_hubs <- node_totals |>
+  filter(x == 1) |>
+  arrange(desc(node_flights)) |>
+  slice_head(n = 3) |>
+  mutate(
+    hub_label = paste0(
+      recode(node, !!!airport_names, .default = node),
+      " ",
+      percent(node_flights / total_flights, accuracy = 1),
+      " (",
+      comma(node_flights),
+      ")"
+    )
+  ) |>
+  pull(hub_label)
+
+br_hubs <- node_totals |>
+  filter(x == 2) |>
+  arrange(desc(node_flights)) |>
+  slice_head(n = 3) |>
+  mutate(
+    hub_label = paste0(
+      recode(node, !!!airport_names, .default = node),
+      " ",
+      percent(node_flights / total_flights, accuracy = 1),
+      " (",
+      comma(node_flights),
+      ")"
+    )
+  ) |>
+  pull(hub_label)
+
+p_day12_final <- ggplot(
+  flows_final,
+  aes(
+    x = x,
+    id = id,
+    split = y_label,
+    value = value
+  )
+) +
+  geom_parallel_sets(
+    aes(fill = FLOW_FILL),
+    alpha = 0.7,
+    axis.width = 0.12
+  ) +
+  geom_parallel_sets_axes(
+    axis.width = 0.22,
+    aes(fill = AXIS_FILL_COL),
+    colour = "grey45",
+    linewidth = 0.4
+  ) +
+  scale_fill_identity() +
+  geom_parallel_sets_labels(
+    size = 3.4,
+    colour = "grey10",
+    angle = 0,
+    lineheight = 0.95
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c("From Europe", "To Brazil"),
+    expand = expansion(mult = c(0.08, 0.08))
+  ) +
+  coord_cartesian(
+    xlim = c(0.72, 2.28),
+    clip = "off"
+  ) +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_textbox_simple(
+      margin = margin(b = 10),
+      lineheight = 1.15
+    ),
+    plot.title.position = "plot",
+    plot.subtitle = element_textbox_simple(
+      margin = margin(b = 12),
+      lineheight = 1.1
+    ),
+    plot.caption = element_textbox_simple(
+      margin = margin(t = 15),
+      colour = "grey35"
+    ),
+    plot.caption.position = "plot",
+    axis.text.x = element_text(face = "bold", colour = "grey20"),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = margin(t = 10, r = 50, b = 10, l = 50)
+  ) +
+  canvas(width = plot_width, height = plot_height, dpi = plot_dpi)
+
+big_nodes <- ggplot_build(p_day12_final)$data[[2]] |>
+  as_tibble() |>
+  distinct(x, label, value, ymin, ymax) |>
+  mutate(
+    y = (ymin + ymax) / 2,
+    x_pos = ifelse(x < 1.5, 0.79, 2.21),
+    hjust = ifelse(x < 1.5, 1, 0),
+    flights_label = comma(value)
+  ) |>
+  filter(value >= 600)
+
+p_day12_final <- p_day12_final +
+  geom_text(
+    data = big_nodes,
+    aes(
+      x = x_pos,
+      y = y,
+      label = flights_label,
+      hjust = hjust
+    ),
+    inherit.aes = FALSE,
+    size = 3.2,
+    colour = "grey35",
+    fontface = "bold"
+  )
+
+p_day12_final
+
+ggsave(
+  "./xx-figures/day12-flow-final.png",
+  plot = p_day12_final,
+  width = plot_width,
+  height = plot_height,
+  dpi = plot_dpi
+)
+```
+
+## Final Deliverable - Outside Labels Proposal
+
+The final candidate moves airport names outside the blocks, keeps service counts inside the larger nodes, and saves the deliverable to the standard `figures/` folder for the README and challenge post.
+
+```{r}
+axis_width_outside <- 0.12
+
+p_day12_outside <- ggplot(
+  flows_final,
+  aes(
+    x = x,
+    id = id,
+    split = y_label,
+    value = value
+  )
+) +
+  geom_parallel_sets(
+    aes(fill = FLOW_FILL),
+    alpha = 0.72,
+    axis.width = axis_width_outside
+  ) +
+  geom_parallel_sets_axes(
+    axis.width = axis_width_outside,
+    aes(fill = AXIS_FILL_COL),
+    colour = "grey45",
+    linewidth = 0.35
+  ) +
+  scale_fill_identity() +
+  scale_x_continuous(
+    breaks = c(1, 2),
+    labels = c("From Europe", "To Brazil"),
+    expand = expansion(mult = c(0.08, 0.08))
+  ) +
+  coord_cartesian(
+    xlim = c(0.72, 2.28),
+    clip = "off"
+  ) +
+  labs(
+    x = NULL,
+    y = NULL,
+    title = our_title,
+    subtitle = paste0(
+      percent(study_share, accuracy = 1), " of ",
+      comma(total_flights), " air transport services between Europe and Brazil in 2025 linked study airports at both ends. ",
+      "On the European side, ", paste(eu_hubs, collapse = ", "), " dominate the market. ",
+      "In Brazil, ", paste(br_hubs, collapse = ", "), " receive the largest shares."
+    ),
+    caption = our_caption
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_textbox_simple(
+      margin = margin(b = 10),
+      lineheight = 1.15
+    ),
+    plot.title.position = "plot",
+    plot.subtitle = element_textbox_simple(
+      margin = margin(b = 12),
+      lineheight = 1.1
+    ),
+    plot.caption = element_textbox_simple(
+      margin = margin(t = 15),
+      colour = "grey35"
+    ),
+    plot.caption.position = "plot",
+    axis.text.x = element_text(face = "bold", colour = "grey20"),
+    axis.text.y = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    plot.margin = margin(t = 10, r = 45, b = 10, l = 45)
+  )
+
+axis_nodes_outside <- ggplot_build(p_day12_outside)$data[[2]] |>
+  as_tibble() |>
+  mutate(axis_side = ifelse(x < 1.5, 1, 2)) |>
+  distinct(axis_side, label, value, ymin, ymax, fill) |>
+  mutate(
+    y = (ymin + ymax) / 2,
+    label_x = ifelse(axis_side == 1, 0.865, 2.135),
+    label_hjust = ifelse(axis_side == 1, 1, 0),
+    count_x = axis_side,
+    count_label = comma(value),
+    count_colour = ifelse(fill == "grey85", "grey15", "white")
+  )
+
+inside_counts <- axis_nodes_outside |>
+  filter(value >= 650)
+
+outside_labels <- axis_nodes_outside
+outside_labels_left <- outside_labels |>
+  filter(axis_side == 1)
+outside_labels_right <- outside_labels |>
+  filter(axis_side == 2)
+
+p_day12_outside <- p_day12_outside +
+  ggrepel::geom_text_repel(
+    data = outside_labels_left,
+    aes(
+      x = label_x,
+      y = y,
+      label = label
+    ),
+    inherit.aes = FALSE,
+    size = 2.75,
+    colour = "grey20",
+    lineheight = 0.9,
+    hjust = 1,
+    direction = "y",
+    seed = 12,
+    force = 1.2,
+    box.padding = 0.08,
+    point.padding = 0.02,
+    min.segment.length = 0,
+    segment.colour = "grey70",
+    segment.size = 0.25
+  ) +
+  ggrepel::geom_text_repel(
+    data = outside_labels_right,
+    aes(
+      x = label_x,
+      y = y,
+      label = label
+    ),
+    inherit.aes = FALSE,
+    size = 2.75,
+    colour = "grey20",
+    lineheight = 0.9,
+    hjust = 0,
+    direction = "y",
+    seed = 12,
+    force = 1.2,
+    box.padding = 0.08,
+    point.padding = 0.02,
+    min.segment.length = 0,
+    segment.colour = "grey70",
+    segment.size = 0.25
+  ) +
+  geom_text(
+    data = inside_counts,
+    aes(
+      x = count_x,
+      y = y,
+      label = count_label,
+      colour = count_colour
+    ),
+    inherit.aes = FALSE,
+    size = 3.1,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  scale_colour_identity()
+
+p_day12_outside_view <- p_day12_outside +
+  canvas(width = plot_width, height = plot_height + 1, dpi = plot_dpi)
+
+p_day12_outside_view
+
+ggsave(
+  "./figures/day12-flow.png",
+  plot = p_day12_outside,
+  width = plot_width,
+  height = plot_height + 1,
+  dpi = plot_dpi
+)
+```
