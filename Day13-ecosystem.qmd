@@ -1,0 +1,403 @@
+---
+title: "Day13 - Ecosystem"
+format: html
+---
+
+## Aim
+
+For Day 13 we want the chart itself to carry the `ecosystem` idea, not just the title. In this aviation setting, an ecosystem is less about a single traffic share and more about how rich each airport's network is, how internationally exposed it is, and whether that complexity comes with a stability penalty.
+
+The candidate below therefore treats each airport as a local ecosystem:
+
+* network diversity is the number of distinct destinations it serves
+* exposure is the share of flights going outside its home region
+* health is the average delay across all flights
+
+That gives us a relationship chart with a clearer ecosystem logic than the earlier simple scatter.
+
+The final version uses a layered scatter plot rather than a more literal ecological graphic. Airport ecosystems are positioned by network richness and average delay, point size shows flight volume, point fill shows international exposure, and the point outline carries the regional identity. The shaded regimes support the metaphor, but the airport field remains the main evidence.
+
+## Setup
+
+```{r}
+library(tidyverse)
+library(readr)
+library(ggplot2)
+library(ggrepel)
+library(ggtext)
+library(ggview)
+library(scales)
+```
+
+## Data Preparation
+
+```{r}
+assign_region <- function(
+      icao
+    , prefixes
+    , label = "Study"
+    , other = NA_character_
+    ) {
+    stopifnot(is.character(icao), is.character(prefixes))
+
+    pattern <- paste0("^(", paste(prefixes, collapse = "|"), ")")
+
+    ifelse(grepl(pattern, icao), label, other)
+}
+
+pattern_eur <- c("E","L","BI")
+pattern_bra <- c("SB","SD","SI","SJ","SN","SS", "SW")
+
+bra_apts <- c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG")
+eur_apts <- c("EGLL","EGKK","EHAM","EDDF","EDDM","LSZH","LFPG","LEMD","LEBL","LPPT","LTFM","LGAV")
+```
+
+```{r}
+bra_migration <- arrow::read_parquet("./data/BRA-adep-ades-2025.parquet") |>
+  filter(ADEP %in% bra_apts) |>
+  mutate(ADES_REG = assign_region(ADES, c(pattern_bra, "1", "8", "9"), "BRA", "INTNL")) |>
+  group_by(YEAR, ADEP, ADES_REG) |>
+  reframe(N_DEST = n_distinct(ADES), DEPS = sum(FLTS)) |>
+  group_by(YEAR, ADEP) |>
+  mutate(SHARE = DEPS / sum(DEPS)) |>
+  ungroup()
+
+eur_migration <- arrow::read_parquet("./data/EUR-adep-ades-2025.parquet") |>
+  filter(ADEP %in% eur_apts) |>
+  mutate(ADES_REG = assign_region(ADES, pattern_eur, "EUR", "INTNL")) |>
+  group_by(YEAR, ADEP, ADES_REG) |>
+  reframe(N_DEST = n_distinct(ADES), DEPS = sum(FLTS)) |>
+  group_by(YEAR, ADEP) |>
+  mutate(SHARE = DEPS / sum(DEPS)) |>
+  ungroup()
+
+bra_migration_wide <- bra_migration |>
+  pivot_wider(
+    names_from = ADES_REG,
+    values_from = c(N_DEST, DEPS, SHARE),
+    names_glue = "{.value}_{ADES_REG}"
+  ) |>
+  mutate(FLTS = DEPS_BRA + DEPS_INTNL) |>
+  rename_with(~ str_replace(.x, "_BRA", "_REG"), contains("_BRA")) |>
+  mutate(REGION = "BRA")
+
+eur_migration_wide <- eur_migration |>
+  pivot_wider(
+    names_from = ADES_REG,
+    values_from = c(N_DEST, DEPS, SHARE),
+    names_glue = "{.value}_{ADES_REG}"
+  ) |>
+  mutate(FLTS = DEPS_EUR + DEPS_INTNL) |>
+  rename_with(~ str_replace(.x, "_EUR", "_REG"), contains("_EUR")) |>
+  mutate(REGION = "EUR")
+
+migration_all <- bind_rows(bra_migration_wide, eur_migration_wide)
+```
+
+```{r}
+bra_punc <- read_csv("./data/BRA-punc-2025.csv", show_col_types = FALSE) |>
+  mutate(REGION = "BRA", YEAR = 2025)
+
+eur_punc <- read_csv("./data/PBWG-EUR-punc-2025.csv", show_col_types = FALSE) |>
+  mutate(REGION = "EUR", YEAR = 2025) |>
+  rename(APT = ICAO)
+
+all_punc <- bind_rows(bra_punc, eur_punc) |>
+  select(-c(N_VALID, N_VALID_MONTH))
+
+bin_midpoints <- tribble(
+  ~BIN, ~DLY_MIN,
+  "(-INF,-60]", -70,
+  "(-60,-55]", -57.5,
+  "(-55,-50]", -52.5,
+  "(-50,-45]", -47.5,
+  "(-45,-40]", -42.5,
+  "(-40,-35]", -37.5,
+  "(-35,-30]", -32.5,
+  "(-30,-25]", -27.5,
+  "(-25,-20]", -22.5,
+  "(-20,-15]", -17.5,
+  "(-15,-10]", -12.5,
+  "(-10,-5]", -7.5,
+  "(-5,0]", -2.5,
+  "(0,5)", 2.5,
+  "[5,10)", 7.5,
+  "[10,15)", 12.5,
+  "[15,20)", 17.5,
+  "[20,25)", 22.5,
+  "[25,30)", 27.5,
+  "[30,35)", 32.5,
+  "[35,40)", 37.5,
+  "[40,45)", 42.5,
+  "[45,50)", 47.5,
+  "[50,55)", 52.5,
+  "[55,60)", 57.5,
+  "[60,INF)", 70
+)
+
+delay_data <- all_punc |>
+  pivot_longer(
+    cols = matches("^\\(|^\\["),
+    names_to = "BIN",
+    values_to = "N_FLTS"
+  ) |>
+  left_join(bin_midpoints, by = "BIN") |>
+  mutate(TOT_DLY = N_FLTS * DLY_MIN) |>
+  group_by(APT, DATE, PHASE, REGION, YEAR) |>
+  reframe(
+    TOT_DLY = sum(TOT_DLY, na.rm = TRUE),
+    N_TOT_FLTS = sum(N_FLTS, na.rm = TRUE)
+  )
+
+avg_annual_delay <- delay_data |>
+  group_by(APT, REGION, YEAR) |>
+  reframe(across(TOT_DLY:N_TOT_FLTS, ~ sum(.x, na.rm = TRUE))) |>
+  mutate(AVG_DLY = TOT_DLY / N_TOT_FLTS)
+```
+
+## Final Candidate
+
+```{r}
+airport_names <- c(
+  EGLL = "Heathrow",
+  EGKK = "Gatwick",
+  EHAM = "Amsterdam",
+  EDDF = "Frankfurt",
+  EDDM = "Munich",
+  LSZH = "Zurich",
+  LFPG = "Paris CDG",
+  LEMD = "Madrid",
+  LEBL = "Barcelona",
+  LPPT = "Lisbon",
+  LTFM = "Istanbul",
+  LGAV = "Athens",
+  SBBR = "Brasilia",
+  SBGR = "Guarulhos",
+  SBSP = "Congonhas",
+  SBKP = "Campinas",
+  SBRJ = "Santos Dumont",
+  SBGL = "Galeao",
+  SBCF = "Belo Horizonte",
+  SBSV = "Salvador",
+  SBPA = "Porto Alegre",
+  SBCT = "Curitiba",
+  SBRF = "Recife",
+  SBEG = "Manaus"
+)
+
+eco_plot_data <- migration_all |>
+  rename(APT = ADEP) |>
+  left_join(
+    avg_annual_delay |>
+      select(APT, REGION, YEAR, AVG_DLY),
+    by = join_by(YEAR, APT, REGION)
+  ) |>
+  mutate(
+    REGION_LAB = ifelse(REGION == "BRA", "Brazil", "Europe"),
+    APT_LAB = recode(APT, !!!as.list(airport_names), .default = APT),
+    N_DEST_TOTAL = N_DEST_REG + N_DEST_INTNL,
+    SHARE_INTNL = replace_na(SHARE_INTNL, 0)
+  )
+
+x_split <- median(eco_plot_data$N_DEST_TOTAL, na.rm = TRUE)
+y_split <- median(eco_plot_data$AVG_DLY, na.rm = TRUE)
+
+most_exposed <- eco_plot_data |>
+  slice_max(SHARE_INTNL, n = 1) |>
+  pull(APT_LAB)
+
+most_diverse <- eco_plot_data |>
+  slice_max(N_DEST_TOTAL, n = 1) |>
+  pull(APT_LAB)
+
+our_title <- "<span style='font-size:12pt'><strong>Chart-Challenge Day 13 - Ecosystem</strong></span><br><strong>More diverse airport ecosystems tend to carry more delay</strong>"
+
+our_subtitle <- paste0(
+  "Each point is a study airport. The x-axis measures ecosystem richness as the number of destinations served; ",
+  "point fill shows the share of international traffic, point outline marks the region, and point size shows total flights. ",
+  most_diverse, " anchors the most diverse ecosystem, while ", most_exposed,
+  " is the most internationally exposed. The pattern is not perfectly linear, but the larger and more outward-facing ecosystems tend to sit higher on delay."
+)
+
+our_caption <- "DECEA Performance Section & EUROCONTROL PRU"
+
+line_labels <- eco_plot_data |>
+  group_by(REGION_LAB) |>
+  reframe(
+    x_line = max(N_DEST_TOTAL) * 0.92,
+    y_line = predict(
+      lm(AVG_DLY ~ N_DEST_TOTAL),
+      newdata = tibble(N_DEST_TOTAL = max(N_DEST_TOTAL) * 0.92)
+    )
+  ) |>
+  mutate(
+    label = paste0(REGION_LAB, " trend"),
+    y_line = ifelse(REGION_LAB == "Europe", y_line + 0.45, y_line - 0.45)
+  )
+
+p_day13_candidate <- ggplot(eco_plot_data, aes(x = N_DEST_TOTAL, y = AVG_DLY)) +
+  #----------------- shaded regime areas ----------------------
+  annotate("rect", xmin = -Inf, xmax = x_split, ymin = -Inf, ymax = y_split, fill = "#dff3e3", alpha = 0.50) +
+  annotate("rect", xmin = x_split, xmax = Inf, ymin = -Inf, ymax = y_split, fill = "#e8f1fb", alpha = 0.55) +
+  annotate("rect", xmin = x_split, xmax = Inf, ymin = y_split, ymax = Inf, fill = "#fde8e8", alpha = 0.65) +
+  # --------------- labels for shaded areas -------------------
+  annotate("label", x = 100, y = -2, hjust = 0, label = "Specialized\nstable niches", size = 3.3, colour = "#295c33", fontface = "bold", fill = alpha("white", 0.78), linewidth = 0) +
+  annotate("label", x = 850, y = 2, label = "Diverse but\nstable niches", size = 3.3, colour = "#224f7a", fontface = "bold", fill = alpha("white", 0.78), linewidth = 0) +
+  annotate("label", x = 800, y = 16, label = "Complex ecosystems\nwith more friction", size = 3.3, colour = "#8a2d2d", fontface = "bold", fill = alpha("white", 0.82), linewidth = 0) +
+  geom_vline(xintercept = x_split, linetype = "dashed", colour = "grey55", linewidth = 0.4) +
+  geom_hline(yintercept = y_split, linetype = "dashed", colour = "grey55", linewidth = 0.4) +
+  
+  # ------------ smooth -----------------------------------
+  geom_smooth(
+    aes(group = REGION_LAB, colour = REGION_LAB),
+    method = "lm",
+    se = FALSE,
+    linewidth = 0.95,
+    linetype = "solid",
+    alpha = 0.9
+     ,show.legend = FALSE   # surpress letter symbol in color legend
+  ) +
+  # ----------- airport scatter points --------------------
+  geom_point(
+    aes(size = FLTS, fill = SHARE_INTNL, colour = REGION_LAB),
+    shape = 21,
+    stroke = 4,
+    alpha = 0.9
+  ) +
+  geom_text_repel(
+    aes(label = APT_LAB),
+    size = 3.2,
+    colour = "grey10",
+    box.padding = 0.55,
+    point.padding = 1.1,
+    min.segment.length = 0,
+    segment.color = alpha("grey35", 0.7),
+    segment.size = 0.35,
+    force = 10,
+    force_pull = 0.05,
+    max.overlaps = Inf,
+    seed = 13
+  ) +
+  geom_label(
+    data = line_labels,
+    aes(x = x_line, y = y_line, label = label, colour = REGION_LAB),
+    inherit.aes = FALSE,
+    hjust = 0,
+    size = 3.0,
+    fill = alpha("white", 0.82),
+    linewidth = 0.15,
+    label.padding = unit(0.12, "lines")
+     ,show.legend = FALSE   # surpress letter symbol in color legend
+  ) +
+  scale_fill_stepsn(
+    colours = c("#f6e8c3", "#dfb27d", "#c06c84", "#6c5b7b"),
+    breaks = c(0, 0.10, 0.20, 0.30, 0.40),
+    labels = percent_format(accuracy = 1),
+    name = "International\ntraffic share"
+  ) +
+  scale_colour_manual(values = c("Brazil" = "#009739", "Europe" = "#003399"), name = "Region") +
+  scale_size_continuous(range = c(2, 8), labels = comma_format()) +
+  guides(
+    size = guide_legend(order = 1),
+    fill = guide_coloursteps(order = 2),
+    colour = guide_legend(
+      order = 3,
+      override.aes = list(fill = "white", size = 6, alpha = 1, linewidth = 1.1)
+    )
+  ) +
+  labs(
+    x = "Ecosystem richness (number of destinations served)",
+    y = "Average delay across all flights (min)",
+    size = "Flights",
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_textbox_simple(margin = margin(b = 10), lineheight = 1.1),
+    plot.subtitle = element_textbox_simple(margin = margin(b = 12), lineheight = 1.08),
+    plot.caption = element_textbox_simple(margin = margin(t = 12), colour = "grey35"),
+    plot.title.position = "plot",
+    plot.caption.position = "plot",
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom",
+    legend.box = "vertical",
+    legend.direction = "horizontal",
+    legend.title = element_text(size = 8.5),
+    legend.text = element_text(size = 7.5),
+    legend.key.width = unit(0.5, "cm"),
+    legend.key.height = unit(0.35, "cm"),
+    legend.spacing.x = unit(0.08, "cm"),
+    legend.spacing.y = unit(0.04, "cm"),
+    legend.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    legend.box.margin = margin(t = 0, r = 0, b = 0, l = 0),
+    axis.title = element_text(face = "bold", colour = "grey20"),
+    plot.margin = margin(t = 10, r = 18, b = 18, l = 8)
+  ) +
+  guides(
+    size = guide_legend(
+      order = 1,
+      title.position = "left",
+      label.position = "bottom",
+      nrow = 1,
+      override.aes = list(stroke = 0.8)
+    ),
+    fill = guide_coloursteps(
+      order = 2,
+      title.position = "left",
+      label.position = "bottom",
+      even.steps = FALSE
+    ),
+    colour = guide_legend(
+      title = NULL
+      , position = "inside"
+      , direction = "vertical"
+      , override.aes = list(fill = "white", size = 3.8, alpha = 1, linewidth = 1.2)
+      , theme = theme(
+          legend.position = c(0.08, 0.93),
+          legend.text = element_text(size = 8),
+          legend.key.height = unit(0.28, "cm"),
+          legend.spacing.y = unit(0.02, "cm")
+        ))
+  )
+
+p_day13_candidate
+```
+
+## Visual Check In RStudio
+
+For a truthful visual check in the RStudio viewer, use the following manually rather than keeping it in an executable chunk:
+
+```r
+our_width  <- 8
+our_height <- 8
+our_dpi    <- 300
+
+p_day13_candidate +
+  ggview::canvas(
+    width = our_width,
+    height = our_height,
+    dpi = our_dpi,
+    units = "in"
+  )
+```
+
+If you want to save a draft manually during testing, use:
+
+```r
+our_width_in  <- our_width / 2.54
+our_height_in <- our_height / 2.54
+
+ggsave(
+  "./xx-figures/day13-ecosystem.png",
+  plot = p_day13_candidate,
+  width = our_width_in,
+  height = our_height_in,
+  dpi = our_dpi,
+  units = "in"
+)
+```
+
+At the moment `ggsave()` appears to behave more reliably here with `units = "in"` than with `units = "cm"`.
+For the final submission, switch the output path to `./figures/day13-ecosystem.png`.

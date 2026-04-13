@@ -100,3 +100,16 @@ Conceptual building blocks
 * outside airport labels with `{ggrepel}` and in-block service counts for the larger nodes
 
 ![Day-12 flow](figures/day12-flow.png)
+
+### Day 13 - "ecosystem"
+
+For Day 13 we interpreted airports as local ecosystems. The final candidate is a layered scatter plot where ecosystem richness is measured by the number of destinations served, average delay indicates systemic health, point size shows flight volume, point fill shows international exposure, and the outline color identifies the region. The chart suggests that the larger and more outward-facing airport ecosystems tend to sit higher on delay, while several Brazilian airports cluster in more specialized and stable niches.
+
+Conceptual building blocks
+
+* airport ecosystem richness from distinct destinations in the 2025 traffic data
+* average delay across all flights from the binned punctuality distributions
+* a layered `geom_point(shape = 21)` design to separate international exposure from region
+* regime shading and labelled trend lines to support the ecosystem metaphor without overwhelming the payload
+
+![Day-13 ecosystem](figures/day13-ecosystem.png)
