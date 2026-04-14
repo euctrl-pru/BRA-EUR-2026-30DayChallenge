@@ -13,3 +13,7 @@ xx-rwb*
 
 # dump test figures, etc
 xx-figures*
+aircraft_silhouettes/
+
+# local draft social posts
+draft-post/

@@ -1,0 +1,576 @@
+---
+title: "Day 14 - Trade Balance"
+format: html
+---
+
+NOTE - HANDLE THIS FILE WITH CARE - THE CODE DOES NOT RUN WITHOUT "TOUCHING" IT.
+WE NEED TO CLEAN THIS UP.
+
+
+```{r}
+#| label: setup
+#| message: false
+
+library(dplyr)
+
+# helper for data prep
+source(here::here("R", "rqutils-zip.R"))
+source(here::here("R", "assign-region.R"))
+source(here::here("R", "turnaround.R"))
+
+# some defaults
+pattern_eur <- c("E","L","BI")
+pattern_bra <- c("SB","SD","SI","SJ","SN","SS", "SW")
+
+bra_apts <- c("SBBR","SBGR","SBSP","SBKP","SBRJ","SBGL","SBCF","SBSV","SBPA","SBCT","SBRF","SBEG")
+eur_apts <- c("EGLL","EGKK","EHAM","EDDF","EDDM","LSZH","LFPG","LEMD","LEBL","LPPT","LTFM","LGAV")
+```
+
+
+“Trade balance” of delay: who exports/absorbs delay? 
+
+What it could show: compare departure delay generated at origin vs arrival delay observed at destination (by airport). 
+
+Data to tap: flight-level dep/arr delay by airport; compute net ‘delay balance’. 
+
+Discussion hook: which airports are net generators vs net absorbers; does this differ BRA vs EUR? 
+
+Design notes: needs careful definition; may require filtering to comparable flights. 
+
+ggplot2 angle: diverging bar/dot plot with reorder; good discussion on metric definition. 
+
+## data preparation
+
+run this to ingest data for today and then store the turnaournd files for the analysis.
+
+### Brazil
+
+The full flight data is stored / collected in totalbr - where we currently hold a working version in data-src.
+Let's get this and extract the payload needed for this study.
+
+```{}
+# first call throws error - not sure why - ran it by hand.
+bra <- fs::dir_ls("data-src", regexp = "totalbr") |> arrow::read_parquet()
+bra
+```
+
+We emulate the turnaround data for Brazil as the data set does not allow for an aircraft by aircraft centered join of the data.    
+Based on the punctuality data we assume "transfer of delay" on an hourly basis.
+
+```{r}
+source(here::here("R","turnaround-bra.R"))
+
+tat_list_bra <- 
+```
+
+
+
+### Europe
+
+```{r}
+path_apdf <- here::here(here::here() |> dirname(),"__DATA", "APDF")
+
+fns_apdf <- check_zip_content(path_apdf, "apdf-2025.zip") |> 
+  mutate(ICAO = str_extract(Name, "[A-Z]{4}")) 
+```
+
+test for one
+
+```{r}
+df <- read_zip_content(path_apdf, "apdf-2025.zip", fns_apdf[1])
+
+# turnaround calculation
+extract_payload_eur <- function(apdf, this_pattern = pattern_eur){
+  payload <- apdf |> 
+    select(  FLTID = AP_C_FLTID
+           , PHASE = SRC_PHASE
+           , ADEP = ADEP_ICAO, ADES = ADES_ICAO
+           , REG = AP_C_REG
+           , BLOCK_TIME = BLOCK_TIME_UTC
+           , SCHED_TIME = SCHED_TIME_UTC
+           , MVT_TIME = MVT_TIME_UTC) |> 
+    mutate(REGION_FLAG = paste(
+        assign_region(ADEP, pattern_eur, "EUR", "INTL")
+      , assign_region(ADES, pattern_eur, "EUR", "INTL")
+      , sep = "-")) 
+  
+  return(payload)
+}
+
+```
+
+```{r}  
+# runf for one:  df <- df |> extract_payload_eur()|> match_turnarounds() |> tibble()
+
+# loop over all entries
+tat_list_eur <- fns_apdf |> select(Name, ICAO) |>
+  
+    pmap(\(Name, ICAO, ...){ #-----------------loop over all airports
+      read_zip_content(path_apdf, "apdf-2025.zip", Name) |> 
+        extract_payload_eur() |> 
+        match_turnarounds() |> 
+        tibble() |> 
+        mutate(ICAO = ICAO, .before = 1)
+      } 
+      ) |> 
+    set_names(fns_apdf$ICAO)
+```
+
+
+
+## getting to the plot
+
+```{r}
+# Step 1 — bind all airport turnaround tables
+all_tat <- bind_rows(list(
+  EDDF = df #, #tat_eddf,
+  #EHAM = tat_eham,
+  # ...
+), .id = "AIRPORT")
+
+all_tat <- bind_rows(tat_list_eur, .id = "AIRPORT")
+
+# Step 2 — compute delay metrics
+tat_delays <- all_tat |>
+  mutate(
+    ARR_DELAY     = as.numeric(difftime(ARR_BLOCK_TIME, ARR_SCHED_TIME, units = "mins")),
+    DEP_DELAY     = as.numeric(difftime(DEP_BLOCK_TIME, DEP_SCHED_TIME, units = "mins")),
+    DELAY_TRANSFER = DEP_DELAY - ARR_DELAY,   # +ve = amplified, -ve = absorbed
+    TAT_BUFFER    = TAT_SCHED - TAT_ACTUAL    # +ve = turn faster than planned
+  ) |>
+  filter(
+    TAT_REGION_FLAG == "EUR-EUR",             # or parameterise
+    TAT_ACTUAL > 10,
+    !is.na(ARR_SCHED_TIME), !is.na(DEP_SCHED_TIME)
+  )
+
+# Step 3 — airport-level summary
+airport_balance <- tat_delays |>
+  group_by(AIRPORT, TAT_REGION_FLAG) |>
+  summarise(
+    n                    = n(),
+    mean_arr_delay       = mean(ARR_DELAY,      na.rm = TRUE),
+    mean_dep_delay       = mean(DEP_DELAY,      na.rm = TRUE),
+    mean_delay_transfer  = mean(DELAY_TRANSFER, na.rm = TRUE),
+    mean_tat_buffer      = mean(TAT_BUFFER,     na.rm = TRUE),
+    pct_absorbed         = mean(DELAY_TRANSFER < 0, na.rm = TRUE) * 100,
+    .groups = "drop"
+  ) |>
+  mutate(REGION = if_else(AIRPORT %in% eur_apts, "EUR", "BRA"))
+```
+
+```{r}
+# Pipeline
+#   1. Bind all airport tibbles, adding ICAO column
+#   2. Compute delay metrics at flight level
+#   3. Summarise at airport level
+#   4. Plot A — diverging dot plot  (net delay transfer per airport)
+#   5. Plot B — arrival vs departure delay scatter (absorber / generator)
+#   6. Plot C — TAT buffer vs delay transfer (flight level, faceted)
+# =============================================================================
+
+library(tidyverse)
+
+# ── Palette & theme -----------------------------------------------------------
+clr_eur    <- "#1F78B4"
+clr_bra    <- "#E66101"
+clr_mid    <- "grey70"
+clr_pos    <- "#D73027"   # amplified / bad
+clr_neg    <- "#1A9850"   # absorbed / good
+
+theme_delay <- function() {
+  theme_minimal(base_size = 11) +
+    theme(
+      plot.title       = element_text(face = "bold", size = 13),
+      plot.subtitle    = element_text(colour = "grey40", size = 10),
+      strip.text       = element_text(face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.position  = "bottom"
+    )
+}
+
+# =============================================================================
+# 0.  INPUT
+# =============================================================================
+# Provide a named list of turnaround tibbles.
+# Names become the ICAO column.  Example:
+#
+#   tat_list <- list(
+#     EDDF = tat_eddf,
+#     EHAM = tat_eham,
+#     EGLL = tat_egll,
+#     ...
+#     SBGR = tat_sbgr,
+#     SBSP = tat_sbsp
+#   )
+#
+# EUR airports: define the ICAO codes so the plots can colour by region.
+eur_airports <- c(
+  "EDDF", "EHAM", "EGLL", "LFPG", "LEMD", "LIRF",
+  "LSZH", "EBBR", "LOWW", "LTFM", "EPWA", "ENGM"
+)
+bra_airports <- c(
+  "SBGR", "SBSP", "SBRJ", "SBGL", "SBPA", "SBSV",
+  "SBRF", "SBCT", "SBCF", "SBFZ", "SBBE", "SBMN"
+)
+
+# TAT_REGION_FLAG levels to include. Adjust to filter before plotting.
+# Set to NULL to include all levels present in the data.
+region_flags_keep <- NULL   # e.g. c("EUR-EUR") to restrict
+
+# Minimum TAT to exclude artefacts (minutes)
+tat_min <- 10
+
+# =============================================================================
+# 1.  BIND & COMPUTE FLIGHT-LEVEL METRICS
+# =============================================================================
+
+prepare_delay_data <- function(tat_list,
+                               eur_airports,
+                               bra_airports,
+                               region_flags_keep = NULL,
+                               tat_min = 10) {
+
+  all_tat <- bind_rows(
+    lapply(names(tat_list), function(icao) {
+      tat_list[[icao]] |> mutate(ICAO = icao)
+    })
+  )
+
+  flight_level <- all_tat |>
+    filter(
+      !is.na(ARR_SCHED_TIME),
+      !is.na(DEP_SCHED_TIME),
+      TAT_ACTUAL > tat_min
+    ) |>
+    mutate(
+      ARR_DELAY      = as.numeric(difftime(ARR_BLOCK_TIME, ARR_SCHED_TIME, units = "mins")),
+      DEP_DELAY      = as.numeric(difftime(DEP_BLOCK_TIME, DEP_SCHED_TIME, units = "mins")),
+      DELAY_TRANSFER = DEP_DELAY - ARR_DELAY,   # +ve amplified, -ve absorbed
+      TAT_BUFFER     = TAT_SCHED - TAT_ACTUAL,  # +ve faster than planned
+      GEO_REGION     = case_when(
+        ICAO %in% eur_airports ~ "EUR",
+        ICAO %in% bra_airports ~ "BRA",
+        TRUE                   ~ "OTHER"
+      )
+    )
+
+  if (!is.null(region_flags_keep)) {
+    flight_level <- flight_level |>
+      filter(TAT_REGION_FLAG %in% region_flags_keep)
+  }
+
+  flight_level
+}
+
+# =============================================================================
+# 2.  AIRPORT-LEVEL SUMMARY
+# =============================================================================
+
+summarise_airports <- function(flight_level) {
+  flight_level |>
+    group_by(ICAO, GEO_REGION, TAT_REGION_FLAG) |>
+    summarise(
+      n                   = n(),
+      mean_arr_delay      = mean(ARR_DELAY,      na.rm = TRUE),
+      mean_dep_delay      = mean(DEP_DELAY,      na.rm = TRUE),
+      mean_delay_transfer = mean(DELAY_TRANSFER, na.rm = TRUE),
+      mean_tat_buffer     = mean(TAT_BUFFER,     na.rm = TRUE),
+      pct_absorbed        = mean(DELAY_TRANSFER < 0, na.rm = TRUE) * 100,
+      .groups = "drop"
+    )
+}
+
+# =============================================================================
+# 3.  PLOT A — Diverging dot plot: net delay transfer per airport
+# =============================================================================
+# One panel per TAT_REGION_FLAG level present in the data.
+# Airports sorted by mean_delay_transfer within each facet.
+# Colour encodes sign: red = amplifier, green = absorber.
+# Shape encodes geo region: EUR vs BRA.
+
+plot_diverging_transfer <- function(airport_summary) {
+
+  # Sort airports by transfer within each flag level
+  plot_data <- airport_summary |>
+    group_by(TAT_REGION_FLAG) |>
+    mutate(ICAO = fct_reorder(ICAO, mean_delay_transfer)) |>
+    ungroup()
+
+  n_flags <- n_distinct(plot_data$TAT_REGION_FLAG)
+
+  ggplot(plot_data,
+         aes(x = mean_delay_transfer, y = ICAO, colour = mean_delay_transfer > 0)) +
+    geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.4, linetype = "dashed") +
+    geom_segment(aes(x = 0, xend = mean_delay_transfer, yend = ICAO),
+                 colour = "grey80", linewidth = 0.4) +
+    geom_point(aes(shape = GEO_REGION), size = 3.5) +
+    scale_colour_manual(
+      values = c("TRUE" = clr_pos, "FALSE" = clr_neg),
+      labels = c("TRUE" = "Amplifier (+)", "FALSE" = "Absorber (−)"),
+      name   = "Role"
+    ) +
+    scale_shape_manual(
+      values = c("EUR" = 16, "BRA" = 17, "OTHER" = 15),
+      name   = "Region"
+    ) +
+    facet_wrap(~ TAT_REGION_FLAG, scales = "free_y", ncol = n_flags) +
+    labs(
+      title    = "Plot A — Net Delay Transfer by Airport",
+      subtitle = "Mean (departure delay − arrival delay) per turnaround · +ve = delay amplified · −ve = delay absorbed",
+      x        = "Mean delay transfer (minutes)",
+      y        = NULL
+    ) +
+    theme_delay()
+}
+
+# =============================================================================
+# 4.  PLOT B — Arrival vs departure delay scatter
+# =============================================================================
+# One point per airport × TAT_REGION_FLAG combination.
+# Diagonal y = x: no transfer. Above = amplifier. Below = absorber.
+# Sized by number of turnarounds.
+
+plot_arr_vs_dep <- function(airport_summary) {
+
+  # Axis range symmetric around origin for interpretability
+  lim <- airport_summary |>
+    summarise(across(c(mean_arr_delay, mean_dep_delay), ~ max(abs(.), na.rm = TRUE))) |>
+    summarise(lim = max(mean_arr_delay, mean_dep_delay) * 1.15) |>
+    pull(lim)
+
+  ggplot(airport_summary,
+         aes(x = mean_arr_delay, y = mean_dep_delay,
+             colour = GEO_REGION, size = n, label = ICAO)) +
+    # Diagonal reference: no transfer
+    geom_abline(slope = 1, intercept = 0,
+                colour = "grey50", linewidth = 0.4, linetype = "dashed") +
+    # Quadrant annotations
+    annotate("text", x = -Inf, y = Inf,  hjust = -0.1, vjust = 1.3,
+             label = "Absorber", colour = clr_neg, size = 3, fontface = "italic") +
+    annotate("text", x = Inf,  y = -Inf, hjust = 1.1,  vjust = -0.5,
+             label = "Amplifier", colour = clr_pos, size = 3, fontface = "italic") +
+    geom_point(alpha = 0.75) +
+    ggrepel::geom_text_repel(size = 2.8, max.overlaps = 20, show.legend = FALSE) +
+    scale_colour_manual(
+      values = c("EUR" = clr_eur, "BRA" = clr_bra, "OTHER" = "grey50"),
+      name   = "Region"
+    ) +
+    scale_size_continuous(name = "Turnarounds", range = c(2, 8),
+                          labels = scales::comma) +
+    scale_x_continuous(limits = c(-lim, lim)) +
+    scale_y_continuous(limits = c(-lim, lim)) +
+    coord_fixed() +
+    facet_wrap(~ TAT_REGION_FLAG) +
+    labs(
+      title    = "Plot B — Arrival Delay vs Departure Delay",
+      subtitle = "Points above the diagonal amplify delay · below absorb · diagonal = no transfer",
+      x        = "Mean arrival delay (minutes)",
+      y        = "Mean departure delay (minutes)"
+    ) +
+    theme_delay()
+}
+
+# =============================================================================
+# 5.  PLOT C — TAT buffer vs delay transfer (flight level)
+# =============================================================================
+# Scatter at individual turnaround level.
+# TAT buffer (planned slack) on x; delay transfer on y.
+# A negative slope means: more buffer → more absorption. This is the mechanism.
+# Smoothed trend per facet.
+
+plot_buffer_vs_transfer <- function(flight_level,
+                                    transfer_clip = 120,
+                                    buffer_clip   = 60) {
+
+  plot_data <- flight_level |>
+    filter(
+      between(DELAY_TRANSFER, -transfer_clip, transfer_clip),
+      between(TAT_BUFFER,     -buffer_clip,   buffer_clip)
+    )
+
+  ggplot(plot_data,
+         aes(x = TAT_BUFFER, y = DELAY_TRANSFER, colour = GEO_REGION)) +
+    geom_hline(yintercept = 0, colour = "grey50", linewidth = 0.4, linetype = "dashed") +
+    geom_vline(xintercept = 0, colour = "grey50", linewidth = 0.4, linetype = "dashed") +
+    geom_point(alpha = 0.05, size = 0.6, show.legend = FALSE) +
+    geom_smooth(method = "lm", se = TRUE, linewidth = 0.9,
+                aes(fill = GEO_REGION), alpha = 0.15) +
+    scale_colour_manual(
+      values = c("EUR" = clr_eur, "BRA" = clr_bra, "OTHER" = "white" ), #, "OTHER" = "grey50"),
+      name   = "Region"
+    ) +
+    scale_fill_manual(
+      values = c("EUR" = clr_eur, "BRA" = clr_bra, "OTHER" = "grey50"),
+      guide  = "none"
+    ) +
+    facet_wrap(~ TAT_REGION_FLAG) +
+    labs(
+      title    = "Plot C — TAT Buffer vs Delay Transfer",
+      subtitle = paste0(
+        "Flight level · clipped to ±", transfer_clip, " min transfer / ±", buffer_clip, " min buffer\n",
+        "Negative slope: more planned slack → more delay absorbed"
+      ),
+      x = "TAT buffer  [scheduled − actual TAT, minutes]",
+      y = "Delay transfer  [departure − arrival delay, minutes]"
+    ) +
+    theme_delay()
+}
+
+# =============================================================================
+# 6.  RUNNER — call after building tat_list
+# =============================================================================
+
+run_delay_analysis <- function(tat_list,
+                               eur_airports      = character(),
+                               bra_airports      = character(),
+                               region_flags_keep = NULL,
+                               tat_min           = 10,
+                               transfer_clip     = 120,
+                               buffer_clip       = 60,
+                               save_plots        = FALSE,
+                               output_dir        = ".") {
+
+  message("Preparing flight-level data ...")
+  fl <- prepare_delay_data(tat_list, eur_airports, bra_airports,
+                           region_flags_keep, tat_min)
+  message(sprintf("  %s turnarounds across %s airports",
+                  scales::comma(nrow(fl)), n_distinct(fl$ICAO)))
+
+  message("Summarising at airport level ...")
+  ap <- summarise_airports(fl)
+
+  message("Building plots ...")
+  pA <- plot_diverging_transfer(ap)
+  pB <- plot_arr_vs_dep(ap)
+  pC <- plot_buffer_vs_transfer(fl, transfer_clip, buffer_clip)
+
+  if (save_plots) {
+    ggsave(file.path(output_dir, "plotA_diverging_transfer.png"), pA,
+           width = 12, height = 7, dpi = 150)
+    ggsave(file.path(output_dir, "plotB_arr_vs_dep.png"),         pB,
+           width = 10, height = 7, dpi = 150)
+    ggsave(file.path(output_dir, "plotC_buffer_vs_transfer.png"), pC,
+           width = 10, height = 7, dpi = 150)
+    message("  Plots saved to ", output_dir)
+  }
+
+  list(
+    flight_level     = fl,
+    airport_summary  = ap,
+    plot_diverging   = pA,
+    plot_arr_vs_dep  = pB,
+    plot_buffer      = pC
+  )
+}
+
+# =============================================================================
+# EXAMPLE USAGE
+# =============================================================================
+if (FALSE) {
+
+  # Assumes match_turnarounds() has been run per airport:
+  tat_list <- list(
+    EDDF = tat_eddf,
+    EHAM = tat_eham,
+    EGLL = tat_egll,
+    LFPG = tat_lfpg,
+    LEMD = tat_lemd,
+    LIRF = tat_lirf,
+    LSZH = tat_lszh,
+    EBBR = tat_ebbr,
+    LOWW = tat_loww,
+    LTFM = tat_ltfm,
+    EPWA = tat_epwa,
+    ENGM = tat_engm,
+    SBGR = tat_sbgr,
+    SBSP = tat_sbsp,
+    SBRJ = tat_sbrj,
+    SBGL = tat_sbgl,
+    SBPA = tat_sbpa,
+    SBSV = tat_sbsv,
+    SBRF = tat_sbrf,
+    SBCT = tat_sbct,
+    SBCF = tat_sbcf,
+    SBFZ = tat_sbfz,
+    SBBE = tat_sbbe,
+    SBMN = tat_sbmn
+  )
+
+  results <- run_delay_analysis(
+    tat_list          = tat_list,
+    eur_airports      = eur_airports,
+    bra_airports      = bra_airports,
+    region_flags_keep = NULL,        # NULL = all flags; or e.g. c("EUR-EUR")
+    tat_min           = 10,
+    transfer_clip     = 120,
+    buffer_clip       = 60,
+    save_plots        = TRUE,
+    output_dir        = "outputs"
+  )
+
+  # Access individual outputs
+  results$plot_diverging
+  results$plot_arr_vs_dep
+  results$plot_buffer
+
+  # Further exploration: worst amplifiers
+  results$airport_summary |>
+    arrange(desc(mean_delay_transfer)) |>
+    select(ICAO, GEO_REGION, TAT_REGION_FLAG, n, mean_arr_delay,
+           mean_dep_delay, mean_delay_transfer, pct_absorbed)
+}
+```
+
+
+final plot
+
+```{r}
+fb <- tat_list_eur |> run_delay_analysis()
+```
+
+```{r}
+p_trade <- fb$plot_diverging
+```
+
+```{r}
+library("ggtext")
+
+our_title <- "<span style='font-size:12pt'><strong>Chart-Challenge - Day 14 - Trade</strong></span><br><strong>Are European study airports delay absorbers?</strong>"
+
+our_subtitle <- "The following chart analyses the **delay transfer** for arrivals and successive departures of aircraft at European airports in 2025. We observe a general amplification of delay suggesting that arrival delays result in longer departure delays. Notable exception is Athens airport (LGAV) where a net absorption for aircraft operating European routes with an successive international leg take place (EUR-INTL). **On average the mean delay transfer accounts for less than 15 minutes.**"
+
+our_caption <- "DECEA Performance Section & EUROCONTROL PRU"
+```
+
+
+```{r}
+p_trade <- p_trade +
+  labs(title = our_title, subtitle = our_subtitle, caption = our_caption) +
+  
+  theme(
+    legend.position = "none"
+    #------------------- title, subtitle, caption ----------------
+    ,plot.title.position = "plot"
+    ,plot.title = element_textbox_simple(
+      margin = margin(b = 10)
+    )
+    
+    ,plot.subtitle.position = "plot"
+    ,plot.subtitle = element_textbox_simple(
+      margin = margin(b = 10)
+    )
+    
+    ,plot.caption.position = "plot"
+    ,plot.caption = element_textbox_simple(
+      margin = margin(t = 10)
+    )
+    
+    ,axis.title.x = element_text(size = rel(0.8))
+  ) 
+
+p_trade +
+  ggview::canvas(width = 8, height = 6, dpi = 300)
+```
+
+ggsave("./figures/day14-trade.png", width = 8, height = 6, dpi = 300)

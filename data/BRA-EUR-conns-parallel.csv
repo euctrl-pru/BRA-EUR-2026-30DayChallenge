@@ -1,0 +1,559 @@
+ADEP,ADES,DEPS,ORIG_NAME,DEST_NAME,ORIG_GROUP,DEST_GROUP,id,x,y,GROUP_TYPE,YEAR
+LPPT,SBGR,1420,Lisbon,Guarulhos,Study,Study,1,4,Lisbon,blue,2024
+LEMD,SBGR,1407,Madrid,Guarulhos,Study,Study,2,4,Madrid,blue,2024
+LFPG,SBGR,1037,Paris CDG,Guarulhos,Study,Study,3,4,Paris CDG,blue,2024
+LIRF,SBGR,897,LIRF,Guarulhos,Non-Study,Study,4,4,LIRF,blue,2024
+EGLL,SBGR,724,Heathrow,Guarulhos,Study,Study,5,4,Heathrow,blue,2024
+EDDF,SBGR,720,Frankfurt,Guarulhos,Study,Study,6,4,Frankfurt,blue,2024
+LPPT,SBGL,578,Lisbon,Galeão,Study,Study,7,4,Lisbon,blue,2024
+LPPT,SBKP,573,Lisbon,Campinas,Study,Study,8,4,Lisbon,blue,2024
+LTFM,SBGR,573,LTFM,Guarulhos,Non-Study,Study,9,4,LTFM,blue,2024
+LPPT,SBRF,520,Lisbon,SBRF,Study,Non-Study,10,4,Lisbon,blue,2024
+LPPT,SBFZ,432,Lisbon,SBFZ,Study,Non-Study,11,4,Lisbon,blue,2024
+LFPG,SBGL,367,Paris CDG,Galeão,Study,Study,12,4,Paris CDG,blue,2024
+LSZH,SBGR,351,Zurich,Guarulhos,Study,Study,13,4,Zurich,blue,2024
+EGLL,SBGL,350,Heathrow,Galeão,Study,Study,14,4,Heathrow,blue,2024
+LPPT,SBSV,350,Lisbon,Salvador,Study,Study,15,4,Lisbon,blue,2024
+LIRF,SBGL,348,LIRF,Galeão,Non-Study,Study,16,4,LIRF,blue,2024
+EHAM,SBGR,344,Amsterdam,Guarulhos,Study,Study,17,4,Amsterdam,blue,2024
+LFPO,SBKP,330,LFPO,Campinas,Non-Study,Study,18,4,LFPO,blue,2024
+LPPT,SBCF,327,Lisbon,Belo Horizonte,Study,Study,19,4,Lisbon,blue,2024
+LPPT,SBSG,321,Lisbon,SBSG,Study,Non-Study,20,4,Lisbon,blue,2024
+EHAM,SBGL,315,Amsterdam,Galeão,Study,Study,21,4,Amsterdam,blue,2024
+LPPT,SBBR,315,Lisbon,Brasília,Study,Study,22,4,Lisbon,blue,2024
+LIMC,SBGR,256,LIMC,Guarulhos,Non-Study,Study,23,4,LIMC,blue,2024
+LEMD,SBGL,225,Madrid,Galeão,Study,Study,24,4,Madrid,blue,2024
+EDDF,SBGL,222,Frankfurt,Galeão,Study,Study,25,4,Frankfurt,blue,2024
+LPPT,SBBE,221,Lisbon,SBBE,Study,Non-Study,26,4,Lisbon,blue,2024
+ELLX,SBKP,208,ELLX,Campinas,Non-Study,Study,27,4,ELLX,blue,2024
+LEBL,SBGR,202,Barcelona,Guarulhos,Study,Study,28,4,Barcelona,blue,2024
+LFPG,SBFZ,171,Paris CDG,SBFZ,Study,Non-Study,29,4,Paris CDG,blue,2024
+LPPR,SBGR,153,LPPR,Guarulhos,Non-Study,Study,30,4,LPPR,blue,2024
+LEMD,SBSV,132,Madrid,Salvador,Study,Study,31,4,Madrid,blue,2024
+ELLX,SBGR,120,ELLX,Guarulhos,Non-Study,Study,32,4,ELLX,blue,2024
+EHAM,SBKP,105,Amsterdam,Campinas,Study,Study,33,4,Amsterdam,blue,2024
+EDDF,SBKP,104,Frankfurt,Campinas,Study,Study,34,4,Frankfurt,blue,2024
+LPPR,SBGL,99,LPPR,Galeão,Non-Study,Study,35,4,LPPR,blue,2024
+LPPT,SBPA,54,Lisbon,Porto Alegre,Study,Study,36,4,Lisbon,blue,2024
+EDDF,SBCT,50,Frankfurt,Curitiba,Study,Study,37,4,Frankfurt,blue,2024
+LPPT,SBFL,47,Lisbon,Other Brazil,Study,Non-Study,38,4,Lisbon,blue,2024
+ELLX,SBGL,37,ELLX,Galeão,Non-Study,Study,39,4,ELLX,blue,2024
+EDDF,SBFZ,29,Frankfurt,SBFZ,Study,Non-Study,40,4,Frankfurt,blue,2024
+LFPG,SBSV,29,Paris CDG,Salvador,Study,Study,41,4,Paris CDG,blue,2024
+LFPB,SBGR,23,Other Europe,Guarulhos,Non-Study,Study,42,4,Other Europe,blue,2024
+LSGG,SBJH,18,Other Europe,SBJH,Non-Study,Non-Study,43,4,Other Europe,gray80,2024
+GCLP,SBGR,16,Other Europe,Guarulhos,Non-Study,Study,44,4,Other Europe,blue,2024
+GCLP,SBFZ,14,Other Europe,SBFZ,Non-Study,Non-Study,45,4,Other Europe,gray80,2024
+EPWA,SBSV,12,Other Europe,Salvador,Non-Study,Study,46,4,Other Europe,blue,2024
+GCLP,SBRF,11,Other Europe,SBRF,Non-Study,Non-Study,47,4,Other Europe,gray80,2024
+EDDM,SBGR,10,Munich,Guarulhos,Study,Study,48,4,Munich,blue,2024
+EGSS,SBGR,10,Other Europe,Guarulhos,Non-Study,Study,49,4,Other Europe,blue,2024
+LFPB,SBGL,10,Other Europe,Galeão,Non-Study,Study,50,4,Other Europe,blue,2024
+EHAM,SBFZ,9,Amsterdam,SBFZ,Study,Non-Study,51,4,Amsterdam,blue,2024
+LFMN,SBJH,9,Other Europe,SBJH,Non-Study,Non-Study,52,4,Other Europe,gray80,2024
+LFPB,SBJH,9,Other Europe,SBJH,Non-Study,Non-Study,53,4,Other Europe,gray80,2024
+LSGG,SBGR,9,Other Europe,Guarulhos,Non-Study,Study,54,4,Other Europe,blue,2024
+EGGW,SBJH,8,Other Europe,SBJH,Non-Study,Non-Study,55,4,Other Europe,gray80,2024
+GCLP,SBJH,8,Other Europe,SBJH,Non-Study,Non-Study,56,4,Other Europe,gray80,2024
+LIML,SBGR,8,Other Europe,Guarulhos,Non-Study,Study,57,4,Other Europe,blue,2024
+EGLF,SBGR,7,Other Europe,Guarulhos,Non-Study,Study,58,4,Other Europe,blue,2024
+EGSS,SBGL,7,Other Europe,Galeão,Non-Study,Study,59,4,Other Europe,blue,2024
+EGSS,SBJH,7,Other Europe,SBJH,Non-Study,Non-Study,60,4,Other Europe,gray80,2024
+GCLP,SBSG,7,Other Europe,SBSG,Non-Study,Non-Study,61,4,Other Europe,gray80,2024
+LEMD,SBFZ,7,Madrid,SBFZ,Study,Non-Study,62,4,Madrid,blue,2024
+EGLF,SBJH,6,Other Europe,SBJH,Non-Study,Non-Study,63,4,Other Europe,gray80,2024
+GCTS,SBSG,6,Other Europe,SBSG,Non-Study,Non-Study,64,4,Other Europe,gray80,2024
+LEMD,SBSG,6,Madrid,SBSG,Study,Non-Study,65,4,Madrid,blue,2024
+LFMN,SBGL,6,Other Europe,Galeão,Non-Study,Study,66,4,Other Europe,blue,2024
+EGGW,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,67,4,Other Europe,blue,2024
+EGLF,SBGL,5,Other Europe,Galeão,Non-Study,Study,68,4,Other Europe,blue,2024
+GCTS,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,69,4,Other Europe,blue,2024
+LEGE,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,70,4,Other Europe,gray80,2024
+LFMN,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,71,4,Other Europe,blue,2024
+LFPB,SBKP,5,Other Europe,Campinas,Non-Study,Study,72,4,Other Europe,blue,2024
+LIML,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,73,4,Other Europe,gray80,2024
+LIRA,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,74,4,Other Europe,gray80,2024
+LIRN,SBGL,5,Other Europe,Galeão,Non-Study,Study,75,4,Other Europe,blue,2024
+LPFR,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,76,4,Other Europe,blue,2024
+LPFR,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,77,4,Other Europe,gray80,2024
+LPPD,SBFZ,5,Other Europe,SBFZ,Non-Study,Non-Study,78,4,Other Europe,gray80,2024
+LPPT,SBJH,5,Lisbon,SBJH,Study,Non-Study,79,4,Lisbon,blue,2024
+LSZH,SBJH,5,Zurich,SBJH,Study,Non-Study,80,4,Zurich,blue,2024
+EBBR,SBFZ,4,Other Europe,SBFZ,Non-Study,Non-Study,81,4,Other Europe,gray80,2024
+EHRD,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,82,4,Other Europe,gray80,2024
+GCLP,SBGL,4,Other Europe,Galeão,Non-Study,Study,83,4,Other Europe,blue,2024
+GCTS,SBFZ,4,Other Europe,SBFZ,Non-Study,Non-Study,84,4,Other Europe,gray80,2024
+GCTS,SBGL,4,Other Europe,Galeão,Non-Study,Study,85,4,Other Europe,blue,2024
+GCTS,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,86,4,Other Europe,gray80,2024
+LEBL,SBFZ,4,Barcelona,SBFZ,Study,Non-Study,87,4,Barcelona,blue,2024
+LEIB,SBGL,4,Other Europe,Galeão,Non-Study,Study,88,4,Other Europe,blue,2024
+LEIB,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,89,4,Other Europe,gray80,2024
+LFLB,SBGR,4,Other Europe,Guarulhos,Non-Study,Study,90,4,Other Europe,blue,2024
+LIEO,SBGL,4,Other Europe,Galeão,Non-Study,Study,91,4,Other Europe,blue,2024
+LIRA,SBGR,4,Other Europe,Guarulhos,Non-Study,Study,92,4,Other Europe,blue,2024
+LPCS,SBGL,4,Other Europe,Galeão,Non-Study,Study,93,4,Other Europe,blue,2024
+LPCS,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,94,4,Other Europe,gray80,2024
+LSGG,SBGL,4,Other Europe,Galeão,Non-Study,Study,95,4,Other Europe,blue,2024
+LSGG,SBPS,4,Other Europe,Other Brazil,Non-Study,Non-Study,96,4,Other Europe,gray80,2024
+EGGW,SBBE,3,Other Europe,SBBE,Non-Study,Non-Study,97,4,Other Europe,gray80,2024
+EGGW,SBGL,3,Other Europe,Galeão,Non-Study,Study,98,4,Other Europe,blue,2024
+GCLP,SBGO,3,Other Europe,Other Brazil,Non-Study,Non-Study,99,4,Other Europe,gray80,2024
+GCLP,SBKP,3,Other Europe,Campinas,Non-Study,Study,100,4,Other Europe,blue,2024
+LEIB,SBGR,3,Other Europe,Guarulhos,Non-Study,Study,101,4,Other Europe,blue,2024
+LEMD,SBBR,3,Madrid,Brasília,Study,Study,102,4,Madrid,blue,2024
+LEMG,SBGL,3,Other Europe,Galeão,Non-Study,Study,103,4,Other Europe,blue,2024
+LEMG,SBGR,3,Other Europe,Guarulhos,Non-Study,Study,104,4,Other Europe,blue,2024
+LFBO,SBFZ,3,Other Europe,SBFZ,Non-Study,Non-Study,105,4,Other Europe,gray80,2024
+LFLL,SBJH,3,Other Europe,SBJH,Non-Study,Non-Study,106,4,Other Europe,gray80,2024
+LIEO,SBJH,3,Other Europe,SBJH,Non-Study,Non-Study,107,4,Other Europe,gray80,2024
+LPCS,SBSG,3,Other Europe,SBSG,Non-Study,Non-Study,108,4,Other Europe,gray80,2024
+LPFR,SBGL,3,Other Europe,Galeão,Non-Study,Study,109,4,Other Europe,blue,2024
+LPMA,SBFZ,3,Other Europe,SBFZ,Non-Study,Non-Study,110,4,Other Europe,gray80,2024
+LPPR,SBCF,3,LPPR,Belo Horizonte,Non-Study,Study,111,4,LPPR,blue,2024
+LPPT,SBMO,3,Lisbon,Other Brazil,Study,Non-Study,112,4,Lisbon,blue,2024
+LTAC,SBGL,3,Other Europe,Galeão,Non-Study,Study,113,4,Other Europe,blue,2024
+EBBR,SBGL,2,Other Europe,Galeão,Non-Study,Study,114,4,Other Europe,blue,2024
+EBLG,SBGL,2,Other Europe,Galeão,Non-Study,Study,115,4,Other Europe,blue,2024
+EBLG,SBKP,2,Other Europe,Campinas,Non-Study,Study,116,4,Other Europe,blue,2024
+EDDB,SBGL,2,Other Europe,Galeão,Non-Study,Study,117,4,Other Europe,blue,2024
+EDDM,SBJH,2,Munich,SBJH,Study,Non-Study,118,4,Munich,blue,2024
+EGGW,SBBR,2,Other Europe,Brasília,Non-Study,Study,119,4,Other Europe,blue,2024
+EGGW,SBCB,2,Other Europe,Other Brazil,Non-Study,Non-Study,120,4,Other Europe,gray80,2024
+GCLP,SBSV,2,Other Europe,Salvador,Non-Study,Study,121,4,Other Europe,blue,2024
+GCTS,SBRF,2,Other Europe,SBRF,Non-Study,Non-Study,122,4,Other Europe,gray80,2024
+GCTS,SBSV,2,Other Europe,Salvador,Non-Study,Study,123,4,Other Europe,blue,2024
+LDDU,SBGL,2,Other Europe,Galeão,Non-Study,Study,124,4,Other Europe,blue,2024
+LEBL,SBGL,2,Barcelona,Galeão,Study,Study,125,4,Barcelona,blue,2024
+LEIB,SBSG,2,Other Europe,SBSG,Non-Study,Non-Study,126,4,Other Europe,gray80,2024
+LEMD,SBRF,2,Madrid,SBRF,Study,Non-Study,127,4,Madrid,blue,2024
+LEST,SBSV,2,Other Europe,Salvador,Non-Study,Study,128,4,Other Europe,blue,2024
+LETL,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,129,4,Other Europe,blue,2024
+LEZL,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,130,4,Other Europe,gray80,2024
+LFLB,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,131,4,Other Europe,gray80,2024
+LFLL,SBGL,2,Other Europe,Galeão,Non-Study,Study,132,4,Other Europe,blue,2024
+LFMN,SBSG,2,Other Europe,SBSG,Non-Study,Non-Study,133,4,Other Europe,gray80,2024
+LFPB,SBBR,2,Other Europe,Brasília,Non-Study,Study,134,4,Other Europe,blue,2024
+LFPB,SBGO,2,Other Europe,Other Brazil,Non-Study,Non-Study,135,4,Other Europe,gray80,2024
+LFPO,SBBR,2,LFPO,Brasília,Non-Study,Study,136,4,LFPO,blue,2024
+LFTH,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,137,4,Other Europe,blue,2024
+LFTH,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,138,4,Other Europe,gray80,2024
+LIBR,SBBR,2,Other Europe,Brasília,Non-Study,Study,139,4,Other Europe,blue,2024
+LIMF,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,140,4,Other Europe,gray80,2024
+LIMJ,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,141,4,Other Europe,gray80,2024
+LIML,SBGL,2,Other Europe,Galeão,Non-Study,Study,142,4,Other Europe,blue,2024
+LIPE,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,143,4,Other Europe,blue,2024
+LIRA,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,144,4,Other Europe,blue,2024
+LIRA,SBGL,2,Other Europe,Galeão,Non-Study,Study,145,4,Other Europe,blue,2024
+LIRP,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,146,4,Other Europe,blue,2024
+LIRP,SBGL,2,Other Europe,Galeão,Non-Study,Study,147,4,Other Europe,blue,2024
+LIRP,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,148,4,Other Europe,blue,2024
+LPCS,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,149,4,Other Europe,blue,2024
+LPPR,SBSG,2,LPPR,SBSG,Non-Study,Non-Study,150,4,LPPR,gray80,2024
+LSZH,SBFZ,2,Zurich,SBFZ,Study,Non-Study,151,4,Zurich,blue,2024
+EBBR,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,152,4,Other Europe,blue,2024
+EBBR,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,153,4,Other Europe,gray80,2024
+EDDB,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,154,4,Other Europe,gray80,2024
+EDDB,SBBR,1,Other Europe,Brasília,Non-Study,Study,155,4,Other Europe,blue,2024
+EDDB,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,156,4,Other Europe,blue,2024
+EDDB,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,157,4,Other Europe,gray80,2024
+EDDF,SBEG,1,Frankfurt,Other Brazil,Study,Non-Study,158,4,Frankfurt,blue,2024
+EDDK,SBGL,1,Other Europe,Galeão,Non-Study,Study,159,4,Other Europe,blue,2024
+EDDS,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,160,4,Other Europe,blue,2024
+EDNY,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,161,4,Other Europe,blue,2024
+EDNY,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,162,4,Other Europe,gray80,2024
+EGGD,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,163,4,Other Europe,blue,2024
+EGKB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,164,4,Other Europe,gray80,2024
+EGKK,SBJH,1,Gatwick,SBJH,Study,Non-Study,165,4,Gatwick,blue,2024
+EGLF,SBBR,1,Other Europe,Brasília,Non-Study,Study,166,4,Other Europe,blue,2024
+EGNJ,SBGL,1,Other Europe,Galeão,Non-Study,Study,167,4,Other Europe,blue,2024
+EGNX,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,168,4,Other Europe,gray80,2024
+EGSS,SBBR,1,Other Europe,Brasília,Non-Study,Study,169,4,Other Europe,blue,2024
+EHRD,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,170,4,Other Europe,blue,2024
+EIDW,SBBR,1,Other Europe,Brasília,Non-Study,Study,171,4,Other Europe,blue,2024
+EIDW,SBSV,1,Other Europe,Salvador,Non-Study,Study,172,4,Other Europe,blue,2024
+EIKN,SBSV,1,Other Europe,Salvador,Non-Study,Study,173,4,Other Europe,blue,2024
+EINN,SBGL,1,Other Europe,Galeão,Non-Study,Study,174,4,Other Europe,blue,2024
+ENGM,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,175,4,Other Europe,blue,2024
+EPRZ,SBCB,1,Other Europe,Other Brazil,Non-Study,Non-Study,176,4,Other Europe,gray80,2024
+EPWA,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,177,4,Other Europe,gray80,2024
+ESKN,SBBR,1,Other Europe,Brasília,Non-Study,Study,178,4,Other Europe,blue,2024
+ESSA,SBGL,1,Other Europe,Galeão,Non-Study,Study,179,4,Other Europe,blue,2024
+GCFV,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,180,4,Other Europe,gray80,2024
+GCLP,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,181,4,Other Europe,gray80,2024
+GCLP,SBBR,1,Other Europe,Brasília,Non-Study,Study,182,4,Other Europe,blue,2024
+GCTS,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,183,4,Other Europe,gray80,2024
+GCTS,SBBR,1,Other Europe,Brasília,Non-Study,Study,184,4,Other Europe,blue,2024
+GCTS,SBCT,1,Other Europe,Curitiba,Non-Study,Study,185,4,Other Europe,blue,2024
+LDDU,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,186,4,Other Europe,blue,2024
+LDDU,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,187,4,Other Europe,gray80,2024
+LDPL,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,188,4,Other Europe,gray80,2024
+LDZD,SBGL,1,Other Europe,Galeão,Non-Study,Study,189,4,Other Europe,blue,2024
+LDZD,SBKP,1,Other Europe,Campinas,Non-Study,Study,190,4,Other Europe,blue,2024
+LEBB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,191,4,Other Europe,gray80,2024
+LEBL,SBFL,1,Barcelona,Other Brazil,Study,Non-Study,192,4,Barcelona,blue,2024
+LEGE,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,193,4,Other Europe,gray80,2024
+LEGR,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,194,4,Other Europe,blue,2024
+LEIB,SBBR,1,Other Europe,Brasília,Non-Study,Study,195,4,Other Europe,blue,2024
+LEIB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,196,4,Other Europe,gray80,2024
+LEMD,SBBE,1,Madrid,SBBE,Study,Non-Study,197,4,Madrid,blue,2024
+LEMD,SBJH,1,Madrid,SBJH,Study,Non-Study,198,4,Madrid,blue,2024
+LEMH,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,199,4,Other Europe,gray80,2024
+LEPA,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,200,4,Other Europe,gray80,2024
+LEPA,SBSV,1,Other Europe,Salvador,Non-Study,Study,201,4,Other Europe,blue,2024
+LESO,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,202,4,Other Europe,gray80,2024
+LEST,SBBR,1,Other Europe,Brasília,Non-Study,Study,203,4,Other Europe,blue,2024
+LETO,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,204,4,Other Europe,gray80,2024
+LEVD,SBGL,1,Other Europe,Galeão,Non-Study,Study,205,4,Other Europe,blue,2024
+LEVX,SBSV,1,Other Europe,Salvador,Non-Study,Study,206,4,Other Europe,blue,2024
+LEZL,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,207,4,Other Europe,blue,2024
+LFBD,SBGL,1,Other Europe,Galeão,Non-Study,Study,208,4,Other Europe,blue,2024
+LFBD,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,209,4,Other Europe,gray80,2024
+LFBZ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,210,4,Other Europe,blue,2024
+LFBZ,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,211,4,Other Europe,blue,2024
+LFLB,SBGL,1,Other Europe,Galeão,Non-Study,Study,212,4,Other Europe,blue,2024
+LFLL,SBBR,1,Other Europe,Brasília,Non-Study,Study,213,4,Other Europe,blue,2024
+LFLL,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,214,4,Other Europe,blue,2024
+LFLL,SBCT,1,Other Europe,Curitiba,Non-Study,Study,215,4,Other Europe,blue,2024
+LFLS,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,216,4,Other Europe,blue,2024
+LFLS,SBGL,1,Other Europe,Galeão,Non-Study,Study,217,4,Other Europe,blue,2024
+LFML,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,218,4,Other Europe,blue,2024
+LFMV,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,219,4,Other Europe,gray80,2024
+LFPB,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,220,4,Other Europe,gray80,2024
+LFPB,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,221,4,Other Europe,gray80,2024
+LFPG,SBSG,1,Paris CDG,SBSG,Study,Non-Study,222,4,Paris CDG,blue,2024
+LFSB,SBGL,1,Other Europe,Galeão,Non-Study,Study,223,4,Other Europe,blue,2024
+LFSB,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,224,4,Other Europe,gray80,2024
+LGAV,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,225,4,Other Europe,gray80,2024
+LGAV,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,226,4,Other Europe,gray80,2024
+LGAV,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,227,4,Other Europe,gray80,2024
+LGKR,SBGL,1,Other Europe,Galeão,Non-Study,Study,228,4,Other Europe,blue,2024
+LHBP,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,229,4,Other Europe,gray80,2024
+LIBD,SBGL,1,Other Europe,Galeão,Non-Study,Study,230,4,Other Europe,blue,2024
+LICC,SBBR,1,Other Europe,Brasília,Non-Study,Study,231,4,Other Europe,blue,2024
+LICC,SBCT,1,Other Europe,Curitiba,Non-Study,Study,232,4,Other Europe,blue,2024
+LICJ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,233,4,Other Europe,blue,2024
+LICJ,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,234,4,Other Europe,gray80,2024
+LIEE,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,235,4,Other Europe,gray80,2024
+LIEO,SBBR,1,Other Europe,Brasília,Non-Study,Study,236,4,Other Europe,blue,2024
+LIEO,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,237,4,Other Europe,gray80,2024
+LIMC,SBCT,1,LIMC,Curitiba,Non-Study,Study,238,4,LIMC,blue,2024
+LIMC,SBFZ,1,LIMC,SBFZ,Non-Study,Non-Study,239,4,LIMC,gray80,2024
+LIMC,SBGL,1,LIMC,Galeão,Non-Study,Study,240,4,LIMC,blue,2024
+LIMF,SBGL,1,Other Europe,Galeão,Non-Study,Study,241,4,Other Europe,blue,2024
+LIML,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,242,4,Other Europe,blue,2024
+LIPE,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,243,4,Other Europe,gray80,2024
+LIPZ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,244,4,Other Europe,blue,2024
+LIPZ,SBGL,1,Other Europe,Galeão,Non-Study,Study,245,4,Other Europe,blue,2024
+LIPZ,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,246,4,Other Europe,blue,2024
+LIRF,SBJH,1,LIRF,SBJH,Non-Study,Non-Study,247,4,LIRF,gray80,2024
+LIRN,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,248,4,Other Europe,gray80,2024
+LIRP,SBKP,1,Other Europe,Campinas,Non-Study,Study,249,4,Other Europe,blue,2024
+LIRS,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,250,4,Other Europe,blue,2024
+LKPR,SBGL,1,Other Europe,Galeão,Non-Study,Study,251,4,Other Europe,blue,2024
+LKPR,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,252,4,Other Europe,gray80,2024
+LMML,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,253,4,Other Europe,blue,2024
+LPCS,SBCB,1,Other Europe,Other Brazil,Non-Study,Non-Study,254,4,Other Europe,gray80,2024
+LPCS,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,255,4,Other Europe,gray80,2024
+LPCS,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,256,4,Other Europe,gray80,2024
+LPCS,SBSV,1,Other Europe,Salvador,Non-Study,Study,257,4,Other Europe,blue,2024
+LPFR,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,258,4,Other Europe,gray80,2024
+LPHR,SBGL,1,Other Europe,Galeão,Non-Study,Study,259,4,Other Europe,blue,2024
+LPMA,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,260,4,Other Europe,blue,2024
+LPMA,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,261,4,Other Europe,gray80,2024
+LPPR,SBBR,1,LPPR,Brasília,Non-Study,Study,262,4,LPPR,blue,2024
+LPPR,SBJH,1,LPPR,SBJH,Non-Study,Non-Study,263,4,LPPR,gray80,2024
+LPPR,SBMO,1,LPPR,Other Brazil,Non-Study,Non-Study,264,4,LPPR,gray80,2024
+LPPT,SBEG,1,Lisbon,Other Brazil,Study,Non-Study,265,4,Lisbon,blue,2024
+LROP,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,266,4,Other Europe,blue,2024
+LSGG,SBBR,1,Other Europe,Brasília,Non-Study,Study,267,4,Other Europe,blue,2024
+LSGG,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,268,4,Other Europe,gray80,2024
+LSGG,SBKP,1,Other Europe,Campinas,Non-Study,Study,269,4,Other Europe,blue,2024
+LSZH,SBBE,1,Zurich,SBBE,Study,Non-Study,270,4,Zurich,blue,2024
+LSZH,SBCT,1,Zurich,Curitiba,Study,Study,271,4,Zurich,blue,2024
+LSZH,SBGL,1,Zurich,Galeão,Study,Study,272,4,Zurich,blue,2024
+LSZH,SBRF,1,Zurich,SBRF,Study,Non-Study,273,4,Zurich,blue,2024
+LTAC,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,274,4,Other Europe,gray80,2024
+LTBA,SBMO,1,Other Europe,Other Brazil,Non-Study,Non-Study,275,4,Other Europe,gray80,2024
+LTFE,SBGL,1,Other Europe,Galeão,Non-Study,Study,276,4,Other Europe,blue,2024
+LTFE,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,277,4,Other Europe,blue,2024
+LYBE,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,278,4,Other Europe,gray80,2024
+LYTV,SBBR,1,Other Europe,Brasília,Non-Study,Study,279,4,Other Europe,blue,2024
+LPPT,SBGR,1420,Lisbon,Guarulhos,Study,Study,1,5,Guarulhos,blue,2024
+LEMD,SBGR,1407,Madrid,Guarulhos,Study,Study,2,5,Guarulhos,blue,2024
+LFPG,SBGR,1037,Paris CDG,Guarulhos,Study,Study,3,5,Guarulhos,blue,2024
+LIRF,SBGR,897,LIRF,Guarulhos,Non-Study,Study,4,5,Guarulhos,blue,2024
+EGLL,SBGR,724,Heathrow,Guarulhos,Study,Study,5,5,Guarulhos,blue,2024
+EDDF,SBGR,720,Frankfurt,Guarulhos,Study,Study,6,5,Guarulhos,blue,2024
+LPPT,SBGL,578,Lisbon,Galeão,Study,Study,7,5,Galeão,blue,2024
+LPPT,SBKP,573,Lisbon,Campinas,Study,Study,8,5,Campinas,blue,2024
+LTFM,SBGR,573,LTFM,Guarulhos,Non-Study,Study,9,5,Guarulhos,blue,2024
+LPPT,SBRF,520,Lisbon,SBRF,Study,Non-Study,10,5,SBRF,blue,2024
+LPPT,SBFZ,432,Lisbon,SBFZ,Study,Non-Study,11,5,SBFZ,blue,2024
+LFPG,SBGL,367,Paris CDG,Galeão,Study,Study,12,5,Galeão,blue,2024
+LSZH,SBGR,351,Zurich,Guarulhos,Study,Study,13,5,Guarulhos,blue,2024
+EGLL,SBGL,350,Heathrow,Galeão,Study,Study,14,5,Galeão,blue,2024
+LPPT,SBSV,350,Lisbon,Salvador,Study,Study,15,5,Salvador,blue,2024
+LIRF,SBGL,348,LIRF,Galeão,Non-Study,Study,16,5,Galeão,blue,2024
+EHAM,SBGR,344,Amsterdam,Guarulhos,Study,Study,17,5,Guarulhos,blue,2024
+LFPO,SBKP,330,LFPO,Campinas,Non-Study,Study,18,5,Campinas,blue,2024
+LPPT,SBCF,327,Lisbon,Belo Horizonte,Study,Study,19,5,Belo Horizonte,blue,2024
+LPPT,SBSG,321,Lisbon,SBSG,Study,Non-Study,20,5,SBSG,blue,2024
+EHAM,SBGL,315,Amsterdam,Galeão,Study,Study,21,5,Galeão,blue,2024
+LPPT,SBBR,315,Lisbon,Brasília,Study,Study,22,5,Brasília,blue,2024
+LIMC,SBGR,256,LIMC,Guarulhos,Non-Study,Study,23,5,Guarulhos,blue,2024
+LEMD,SBGL,225,Madrid,Galeão,Study,Study,24,5,Galeão,blue,2024
+EDDF,SBGL,222,Frankfurt,Galeão,Study,Study,25,5,Galeão,blue,2024
+LPPT,SBBE,221,Lisbon,SBBE,Study,Non-Study,26,5,SBBE,blue,2024
+ELLX,SBKP,208,ELLX,Campinas,Non-Study,Study,27,5,Campinas,blue,2024
+LEBL,SBGR,202,Barcelona,Guarulhos,Study,Study,28,5,Guarulhos,blue,2024
+LFPG,SBFZ,171,Paris CDG,SBFZ,Study,Non-Study,29,5,SBFZ,blue,2024
+LPPR,SBGR,153,LPPR,Guarulhos,Non-Study,Study,30,5,Guarulhos,blue,2024
+LEMD,SBSV,132,Madrid,Salvador,Study,Study,31,5,Salvador,blue,2024
+ELLX,SBGR,120,ELLX,Guarulhos,Non-Study,Study,32,5,Guarulhos,blue,2024
+EHAM,SBKP,105,Amsterdam,Campinas,Study,Study,33,5,Campinas,blue,2024
+EDDF,SBKP,104,Frankfurt,Campinas,Study,Study,34,5,Campinas,blue,2024
+LPPR,SBGL,99,LPPR,Galeão,Non-Study,Study,35,5,Galeão,blue,2024
+LPPT,SBPA,54,Lisbon,Porto Alegre,Study,Study,36,5,Porto Alegre,blue,2024
+EDDF,SBCT,50,Frankfurt,Curitiba,Study,Study,37,5,Curitiba,blue,2024
+LPPT,SBFL,47,Lisbon,Other Brazil,Study,Non-Study,38,5,Other Brazil,blue,2024
+ELLX,SBGL,37,ELLX,Galeão,Non-Study,Study,39,5,Galeão,blue,2024
+EDDF,SBFZ,29,Frankfurt,SBFZ,Study,Non-Study,40,5,SBFZ,blue,2024
+LFPG,SBSV,29,Paris CDG,Salvador,Study,Study,41,5,Salvador,blue,2024
+LFPB,SBGR,23,Other Europe,Guarulhos,Non-Study,Study,42,5,Guarulhos,blue,2024
+LSGG,SBJH,18,Other Europe,SBJH,Non-Study,Non-Study,43,5,SBJH,gray80,2024
+GCLP,SBGR,16,Other Europe,Guarulhos,Non-Study,Study,44,5,Guarulhos,blue,2024
+GCLP,SBFZ,14,Other Europe,SBFZ,Non-Study,Non-Study,45,5,SBFZ,gray80,2024
+EPWA,SBSV,12,Other Europe,Salvador,Non-Study,Study,46,5,Salvador,blue,2024
+GCLP,SBRF,11,Other Europe,SBRF,Non-Study,Non-Study,47,5,SBRF,gray80,2024
+EDDM,SBGR,10,Munich,Guarulhos,Study,Study,48,5,Guarulhos,blue,2024
+EGSS,SBGR,10,Other Europe,Guarulhos,Non-Study,Study,49,5,Guarulhos,blue,2024
+LFPB,SBGL,10,Other Europe,Galeão,Non-Study,Study,50,5,Galeão,blue,2024
+EHAM,SBFZ,9,Amsterdam,SBFZ,Study,Non-Study,51,5,SBFZ,blue,2024
+LFMN,SBJH,9,Other Europe,SBJH,Non-Study,Non-Study,52,5,SBJH,gray80,2024
+LFPB,SBJH,9,Other Europe,SBJH,Non-Study,Non-Study,53,5,SBJH,gray80,2024
+LSGG,SBGR,9,Other Europe,Guarulhos,Non-Study,Study,54,5,Guarulhos,blue,2024
+EGGW,SBJH,8,Other Europe,SBJH,Non-Study,Non-Study,55,5,SBJH,gray80,2024
+GCLP,SBJH,8,Other Europe,SBJH,Non-Study,Non-Study,56,5,SBJH,gray80,2024
+LIML,SBGR,8,Other Europe,Guarulhos,Non-Study,Study,57,5,Guarulhos,blue,2024
+EGLF,SBGR,7,Other Europe,Guarulhos,Non-Study,Study,58,5,Guarulhos,blue,2024
+EGSS,SBGL,7,Other Europe,Galeão,Non-Study,Study,59,5,Galeão,blue,2024
+EGSS,SBJH,7,Other Europe,SBJH,Non-Study,Non-Study,60,5,SBJH,gray80,2024
+GCLP,SBSG,7,Other Europe,SBSG,Non-Study,Non-Study,61,5,SBSG,gray80,2024
+LEMD,SBFZ,7,Madrid,SBFZ,Study,Non-Study,62,5,SBFZ,blue,2024
+EGLF,SBJH,6,Other Europe,SBJH,Non-Study,Non-Study,63,5,SBJH,gray80,2024
+GCTS,SBSG,6,Other Europe,SBSG,Non-Study,Non-Study,64,5,SBSG,gray80,2024
+LEMD,SBSG,6,Madrid,SBSG,Study,Non-Study,65,5,SBSG,blue,2024
+LFMN,SBGL,6,Other Europe,Galeão,Non-Study,Study,66,5,Galeão,blue,2024
+EGGW,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,67,5,Guarulhos,blue,2024
+EGLF,SBGL,5,Other Europe,Galeão,Non-Study,Study,68,5,Galeão,blue,2024
+GCTS,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,69,5,Guarulhos,blue,2024
+LEGE,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,70,5,SBJH,gray80,2024
+LFMN,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,71,5,Guarulhos,blue,2024
+LFPB,SBKP,5,Other Europe,Campinas,Non-Study,Study,72,5,Campinas,blue,2024
+LIML,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,73,5,SBJH,gray80,2024
+LIRA,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,74,5,SBJH,gray80,2024
+LIRN,SBGL,5,Other Europe,Galeão,Non-Study,Study,75,5,Galeão,blue,2024
+LPFR,SBGR,5,Other Europe,Guarulhos,Non-Study,Study,76,5,Guarulhos,blue,2024
+LPFR,SBJH,5,Other Europe,SBJH,Non-Study,Non-Study,77,5,SBJH,gray80,2024
+LPPD,SBFZ,5,Other Europe,SBFZ,Non-Study,Non-Study,78,5,SBFZ,gray80,2024
+LPPT,SBJH,5,Lisbon,SBJH,Study,Non-Study,79,5,SBJH,blue,2024
+LSZH,SBJH,5,Zurich,SBJH,Study,Non-Study,80,5,SBJH,blue,2024
+EBBR,SBFZ,4,Other Europe,SBFZ,Non-Study,Non-Study,81,5,SBFZ,gray80,2024
+EHRD,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,82,5,SBJH,gray80,2024
+GCLP,SBGL,4,Other Europe,Galeão,Non-Study,Study,83,5,Galeão,blue,2024
+GCTS,SBFZ,4,Other Europe,SBFZ,Non-Study,Non-Study,84,5,SBFZ,gray80,2024
+GCTS,SBGL,4,Other Europe,Galeão,Non-Study,Study,85,5,Galeão,blue,2024
+GCTS,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,86,5,SBJH,gray80,2024
+LEBL,SBFZ,4,Barcelona,SBFZ,Study,Non-Study,87,5,SBFZ,blue,2024
+LEIB,SBGL,4,Other Europe,Galeão,Non-Study,Study,88,5,Galeão,blue,2024
+LEIB,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,89,5,SBJH,gray80,2024
+LFLB,SBGR,4,Other Europe,Guarulhos,Non-Study,Study,90,5,Guarulhos,blue,2024
+LIEO,SBGL,4,Other Europe,Galeão,Non-Study,Study,91,5,Galeão,blue,2024
+LIRA,SBGR,4,Other Europe,Guarulhos,Non-Study,Study,92,5,Guarulhos,blue,2024
+LPCS,SBGL,4,Other Europe,Galeão,Non-Study,Study,93,5,Galeão,blue,2024
+LPCS,SBJH,4,Other Europe,SBJH,Non-Study,Non-Study,94,5,SBJH,gray80,2024
+LSGG,SBGL,4,Other Europe,Galeão,Non-Study,Study,95,5,Galeão,blue,2024
+LSGG,SBPS,4,Other Europe,Other Brazil,Non-Study,Non-Study,96,5,Other Brazil,gray80,2024
+EGGW,SBBE,3,Other Europe,SBBE,Non-Study,Non-Study,97,5,SBBE,gray80,2024
+EGGW,SBGL,3,Other Europe,Galeão,Non-Study,Study,98,5,Galeão,blue,2024
+GCLP,SBGO,3,Other Europe,Other Brazil,Non-Study,Non-Study,99,5,Other Brazil,gray80,2024
+GCLP,SBKP,3,Other Europe,Campinas,Non-Study,Study,100,5,Campinas,blue,2024
+LEIB,SBGR,3,Other Europe,Guarulhos,Non-Study,Study,101,5,Guarulhos,blue,2024
+LEMD,SBBR,3,Madrid,Brasília,Study,Study,102,5,Brasília,blue,2024
+LEMG,SBGL,3,Other Europe,Galeão,Non-Study,Study,103,5,Galeão,blue,2024
+LEMG,SBGR,3,Other Europe,Guarulhos,Non-Study,Study,104,5,Guarulhos,blue,2024
+LFBO,SBFZ,3,Other Europe,SBFZ,Non-Study,Non-Study,105,5,SBFZ,gray80,2024
+LFLL,SBJH,3,Other Europe,SBJH,Non-Study,Non-Study,106,5,SBJH,gray80,2024
+LIEO,SBJH,3,Other Europe,SBJH,Non-Study,Non-Study,107,5,SBJH,gray80,2024
+LPCS,SBSG,3,Other Europe,SBSG,Non-Study,Non-Study,108,5,SBSG,gray80,2024
+LPFR,SBGL,3,Other Europe,Galeão,Non-Study,Study,109,5,Galeão,blue,2024
+LPMA,SBFZ,3,Other Europe,SBFZ,Non-Study,Non-Study,110,5,SBFZ,gray80,2024
+LPPR,SBCF,3,LPPR,Belo Horizonte,Non-Study,Study,111,5,Belo Horizonte,blue,2024
+LPPT,SBMO,3,Lisbon,Other Brazil,Study,Non-Study,112,5,Other Brazil,blue,2024
+LTAC,SBGL,3,Other Europe,Galeão,Non-Study,Study,113,5,Galeão,blue,2024
+EBBR,SBGL,2,Other Europe,Galeão,Non-Study,Study,114,5,Galeão,blue,2024
+EBLG,SBGL,2,Other Europe,Galeão,Non-Study,Study,115,5,Galeão,blue,2024
+EBLG,SBKP,2,Other Europe,Campinas,Non-Study,Study,116,5,Campinas,blue,2024
+EDDB,SBGL,2,Other Europe,Galeão,Non-Study,Study,117,5,Galeão,blue,2024
+EDDM,SBJH,2,Munich,SBJH,Study,Non-Study,118,5,SBJH,blue,2024
+EGGW,SBBR,2,Other Europe,Brasília,Non-Study,Study,119,5,Brasília,blue,2024
+EGGW,SBCB,2,Other Europe,Other Brazil,Non-Study,Non-Study,120,5,Other Brazil,gray80,2024
+GCLP,SBSV,2,Other Europe,Salvador,Non-Study,Study,121,5,Salvador,blue,2024
+GCTS,SBRF,2,Other Europe,SBRF,Non-Study,Non-Study,122,5,SBRF,gray80,2024
+GCTS,SBSV,2,Other Europe,Salvador,Non-Study,Study,123,5,Salvador,blue,2024
+LDDU,SBGL,2,Other Europe,Galeão,Non-Study,Study,124,5,Galeão,blue,2024
+LEBL,SBGL,2,Barcelona,Galeão,Study,Study,125,5,Galeão,blue,2024
+LEIB,SBSG,2,Other Europe,SBSG,Non-Study,Non-Study,126,5,SBSG,gray80,2024
+LEMD,SBRF,2,Madrid,SBRF,Study,Non-Study,127,5,SBRF,blue,2024
+LEST,SBSV,2,Other Europe,Salvador,Non-Study,Study,128,5,Salvador,blue,2024
+LETL,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,129,5,Belo Horizonte,blue,2024
+LEZL,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,130,5,SBJH,gray80,2024
+LFLB,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,131,5,SBJH,gray80,2024
+LFLL,SBGL,2,Other Europe,Galeão,Non-Study,Study,132,5,Galeão,blue,2024
+LFMN,SBSG,2,Other Europe,SBSG,Non-Study,Non-Study,133,5,SBSG,gray80,2024
+LFPB,SBBR,2,Other Europe,Brasília,Non-Study,Study,134,5,Brasília,blue,2024
+LFPB,SBGO,2,Other Europe,Other Brazil,Non-Study,Non-Study,135,5,Other Brazil,gray80,2024
+LFPO,SBBR,2,LFPO,Brasília,Non-Study,Study,136,5,Brasília,blue,2024
+LFTH,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,137,5,Guarulhos,blue,2024
+LFTH,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,138,5,SBJH,gray80,2024
+LIBR,SBBR,2,Other Europe,Brasília,Non-Study,Study,139,5,Brasília,blue,2024
+LIMF,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,140,5,SBJH,gray80,2024
+LIMJ,SBJH,2,Other Europe,SBJH,Non-Study,Non-Study,141,5,SBJH,gray80,2024
+LIML,SBGL,2,Other Europe,Galeão,Non-Study,Study,142,5,Galeão,blue,2024
+LIPE,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,143,5,Guarulhos,blue,2024
+LIRA,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,144,5,Belo Horizonte,blue,2024
+LIRA,SBGL,2,Other Europe,Galeão,Non-Study,Study,145,5,Galeão,blue,2024
+LIRP,SBCF,2,Other Europe,Belo Horizonte,Non-Study,Study,146,5,Belo Horizonte,blue,2024
+LIRP,SBGL,2,Other Europe,Galeão,Non-Study,Study,147,5,Galeão,blue,2024
+LIRP,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,148,5,Guarulhos,blue,2024
+LPCS,SBGR,2,Other Europe,Guarulhos,Non-Study,Study,149,5,Guarulhos,blue,2024
+LPPR,SBSG,2,LPPR,SBSG,Non-Study,Non-Study,150,5,SBSG,gray80,2024
+LSZH,SBFZ,2,Zurich,SBFZ,Study,Non-Study,151,5,SBFZ,blue,2024
+EBBR,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,152,5,Guarulhos,blue,2024
+EBBR,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,153,5,SBJH,gray80,2024
+EDDB,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,154,5,SBBE,gray80,2024
+EDDB,SBBR,1,Other Europe,Brasília,Non-Study,Study,155,5,Brasília,blue,2024
+EDDB,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,156,5,Guarulhos,blue,2024
+EDDB,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,157,5,Other Brazil,gray80,2024
+EDDF,SBEG,1,Frankfurt,Other Brazil,Study,Non-Study,158,5,Other Brazil,blue,2024
+EDDK,SBGL,1,Other Europe,Galeão,Non-Study,Study,159,5,Galeão,blue,2024
+EDDS,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,160,5,Guarulhos,blue,2024
+EDNY,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,161,5,Guarulhos,blue,2024
+EDNY,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,162,5,Other Brazil,gray80,2024
+EGGD,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,163,5,Guarulhos,blue,2024
+EGKB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,164,5,SBFZ,gray80,2024
+EGKK,SBJH,1,Gatwick,SBJH,Study,Non-Study,165,5,SBJH,blue,2024
+EGLF,SBBR,1,Other Europe,Brasília,Non-Study,Study,166,5,Brasília,blue,2024
+EGNJ,SBGL,1,Other Europe,Galeão,Non-Study,Study,167,5,Galeão,blue,2024
+EGNX,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,168,5,SBJH,gray80,2024
+EGSS,SBBR,1,Other Europe,Brasília,Non-Study,Study,169,5,Brasília,blue,2024
+EHRD,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,170,5,Guarulhos,blue,2024
+EIDW,SBBR,1,Other Europe,Brasília,Non-Study,Study,171,5,Brasília,blue,2024
+EIDW,SBSV,1,Other Europe,Salvador,Non-Study,Study,172,5,Salvador,blue,2024
+EIKN,SBSV,1,Other Europe,Salvador,Non-Study,Study,173,5,Salvador,blue,2024
+EINN,SBGL,1,Other Europe,Galeão,Non-Study,Study,174,5,Galeão,blue,2024
+ENGM,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,175,5,Belo Horizonte,blue,2024
+EPRZ,SBCB,1,Other Europe,Other Brazil,Non-Study,Non-Study,176,5,Other Brazil,gray80,2024
+EPWA,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,177,5,SBRF,gray80,2024
+ESKN,SBBR,1,Other Europe,Brasília,Non-Study,Study,178,5,Brasília,blue,2024
+ESSA,SBGL,1,Other Europe,Galeão,Non-Study,Study,179,5,Galeão,blue,2024
+GCFV,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,180,5,SBJH,gray80,2024
+GCLP,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,181,5,SBBE,gray80,2024
+GCLP,SBBR,1,Other Europe,Brasília,Non-Study,Study,182,5,Brasília,blue,2024
+GCTS,SBBE,1,Other Europe,SBBE,Non-Study,Non-Study,183,5,SBBE,gray80,2024
+GCTS,SBBR,1,Other Europe,Brasília,Non-Study,Study,184,5,Brasília,blue,2024
+GCTS,SBCT,1,Other Europe,Curitiba,Non-Study,Study,185,5,Curitiba,blue,2024
+LDDU,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,186,5,Guarulhos,blue,2024
+LDDU,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,187,5,SBJH,gray80,2024
+LDPL,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,188,5,SBFZ,gray80,2024
+LDZD,SBGL,1,Other Europe,Galeão,Non-Study,Study,189,5,Galeão,blue,2024
+LDZD,SBKP,1,Other Europe,Campinas,Non-Study,Study,190,5,Campinas,blue,2024
+LEBB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,191,5,SBFZ,gray80,2024
+LEBL,SBFL,1,Barcelona,Other Brazil,Study,Non-Study,192,5,Other Brazil,blue,2024
+LEGE,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,193,5,SBFZ,gray80,2024
+LEGR,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,194,5,Guarulhos,blue,2024
+LEIB,SBBR,1,Other Europe,Brasília,Non-Study,Study,195,5,Brasília,blue,2024
+LEIB,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,196,5,SBFZ,gray80,2024
+LEMD,SBBE,1,Madrid,SBBE,Study,Non-Study,197,5,SBBE,blue,2024
+LEMD,SBJH,1,Madrid,SBJH,Study,Non-Study,198,5,SBJH,blue,2024
+LEMH,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,199,5,SBSG,gray80,2024
+LEPA,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,200,5,SBJH,gray80,2024
+LEPA,SBSV,1,Other Europe,Salvador,Non-Study,Study,201,5,Salvador,blue,2024
+LESO,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,202,5,SBJH,gray80,2024
+LEST,SBBR,1,Other Europe,Brasília,Non-Study,Study,203,5,Brasília,blue,2024
+LETO,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,204,5,SBRF,gray80,2024
+LEVD,SBGL,1,Other Europe,Galeão,Non-Study,Study,205,5,Galeão,blue,2024
+LEVX,SBSV,1,Other Europe,Salvador,Non-Study,Study,206,5,Salvador,blue,2024
+LEZL,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,207,5,Guarulhos,blue,2024
+LFBD,SBGL,1,Other Europe,Galeão,Non-Study,Study,208,5,Galeão,blue,2024
+LFBD,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,209,5,SBRF,gray80,2024
+LFBZ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,210,5,Belo Horizonte,blue,2024
+LFBZ,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,211,5,Guarulhos,blue,2024
+LFLB,SBGL,1,Other Europe,Galeão,Non-Study,Study,212,5,Galeão,blue,2024
+LFLL,SBBR,1,Other Europe,Brasília,Non-Study,Study,213,5,Brasília,blue,2024
+LFLL,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,214,5,Belo Horizonte,blue,2024
+LFLL,SBCT,1,Other Europe,Curitiba,Non-Study,Study,215,5,Curitiba,blue,2024
+LFLS,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,216,5,Belo Horizonte,blue,2024
+LFLS,SBGL,1,Other Europe,Galeão,Non-Study,Study,217,5,Galeão,blue,2024
+LFML,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,218,5,Guarulhos,blue,2024
+LFMV,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,219,5,SBSG,gray80,2024
+LFPB,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,220,5,Other Brazil,gray80,2024
+LFPB,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,221,5,SBRF,gray80,2024
+LFPG,SBSG,1,Paris CDG,SBSG,Study,Non-Study,222,5,SBSG,blue,2024
+LFSB,SBGL,1,Other Europe,Galeão,Non-Study,Study,223,5,Galeão,blue,2024
+LFSB,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,224,5,SBJH,gray80,2024
+LGAV,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,225,5,SBJH,gray80,2024
+LGAV,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,226,5,Other Brazil,gray80,2024
+LGAV,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,227,5,SBRF,gray80,2024
+LGKR,SBGL,1,Other Europe,Galeão,Non-Study,Study,228,5,Galeão,blue,2024
+LHBP,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,229,5,SBFZ,gray80,2024
+LIBD,SBGL,1,Other Europe,Galeão,Non-Study,Study,230,5,Galeão,blue,2024
+LICC,SBBR,1,Other Europe,Brasília,Non-Study,Study,231,5,Brasília,blue,2024
+LICC,SBCT,1,Other Europe,Curitiba,Non-Study,Study,232,5,Curitiba,blue,2024
+LICJ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,233,5,Belo Horizonte,blue,2024
+LICJ,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,234,5,SBJH,gray80,2024
+LIEE,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,235,5,SBJH,gray80,2024
+LIEO,SBBR,1,Other Europe,Brasília,Non-Study,Study,236,5,Brasília,blue,2024
+LIEO,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,237,5,SBSG,gray80,2024
+LIMC,SBCT,1,LIMC,Curitiba,Non-Study,Study,238,5,Curitiba,blue,2024
+LIMC,SBFZ,1,LIMC,SBFZ,Non-Study,Non-Study,239,5,SBFZ,gray80,2024
+LIMC,SBGL,1,LIMC,Galeão,Non-Study,Study,240,5,Galeão,blue,2024
+LIMF,SBGL,1,Other Europe,Galeão,Non-Study,Study,241,5,Galeão,blue,2024
+LIML,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,242,5,Belo Horizonte,blue,2024
+LIPE,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,243,5,SBJH,gray80,2024
+LIPZ,SBCF,1,Other Europe,Belo Horizonte,Non-Study,Study,244,5,Belo Horizonte,blue,2024
+LIPZ,SBGL,1,Other Europe,Galeão,Non-Study,Study,245,5,Galeão,blue,2024
+LIPZ,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,246,5,Guarulhos,blue,2024
+LIRF,SBJH,1,LIRF,SBJH,Non-Study,Non-Study,247,5,SBJH,gray80,2024
+LIRN,SBJH,1,Other Europe,SBJH,Non-Study,Non-Study,248,5,SBJH,gray80,2024
+LIRP,SBKP,1,Other Europe,Campinas,Non-Study,Study,249,5,Campinas,blue,2024
+LIRS,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,250,5,Guarulhos,blue,2024
+LKPR,SBGL,1,Other Europe,Galeão,Non-Study,Study,251,5,Galeão,blue,2024
+LKPR,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,252,5,SBRF,gray80,2024
+LMML,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,253,5,Guarulhos,blue,2024
+LPCS,SBCB,1,Other Europe,Other Brazil,Non-Study,Non-Study,254,5,Other Brazil,gray80,2024
+LPCS,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,255,5,SBFZ,gray80,2024
+LPCS,SBPS,1,Other Europe,Other Brazil,Non-Study,Non-Study,256,5,Other Brazil,gray80,2024
+LPCS,SBSV,1,Other Europe,Salvador,Non-Study,Study,257,5,Salvador,blue,2024
+LPFR,SBSG,1,Other Europe,SBSG,Non-Study,Non-Study,258,5,SBSG,gray80,2024
+LPHR,SBGL,1,Other Europe,Galeão,Non-Study,Study,259,5,Galeão,blue,2024
+LPMA,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,260,5,Guarulhos,blue,2024
+LPMA,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,261,5,SBRF,gray80,2024
+LPPR,SBBR,1,LPPR,Brasília,Non-Study,Study,262,5,Brasília,blue,2024
+LPPR,SBJH,1,LPPR,SBJH,Non-Study,Non-Study,263,5,SBJH,gray80,2024
+LPPR,SBMO,1,LPPR,Other Brazil,Non-Study,Non-Study,264,5,Other Brazil,gray80,2024
+LPPT,SBEG,1,Lisbon,Other Brazil,Study,Non-Study,265,5,Other Brazil,blue,2024
+LROP,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,266,5,Guarulhos,blue,2024
+LSGG,SBBR,1,Other Europe,Brasília,Non-Study,Study,267,5,Brasília,blue,2024
+LSGG,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,268,5,SBFZ,gray80,2024
+LSGG,SBKP,1,Other Europe,Campinas,Non-Study,Study,269,5,Campinas,blue,2024
+LSZH,SBBE,1,Zurich,SBBE,Study,Non-Study,270,5,SBBE,blue,2024
+LSZH,SBCT,1,Zurich,Curitiba,Study,Study,271,5,Curitiba,blue,2024
+LSZH,SBGL,1,Zurich,Galeão,Study,Study,272,5,Galeão,blue,2024
+LSZH,SBRF,1,Zurich,SBRF,Study,Non-Study,273,5,SBRF,blue,2024
+LTAC,SBFZ,1,Other Europe,SBFZ,Non-Study,Non-Study,274,5,SBFZ,gray80,2024
+LTBA,SBMO,1,Other Europe,Other Brazil,Non-Study,Non-Study,275,5,Other Brazil,gray80,2024
+LTFE,SBGL,1,Other Europe,Galeão,Non-Study,Study,276,5,Galeão,blue,2024
+LTFE,SBGR,1,Other Europe,Guarulhos,Non-Study,Study,277,5,Guarulhos,blue,2024
+LYBE,SBRF,1,Other Europe,SBRF,Non-Study,Non-Study,278,5,SBRF,gray80,2024
+LYTV,SBBR,1,Other Europe,Brasília,Non-Study,Study,279,5,Brasília,blue,2024

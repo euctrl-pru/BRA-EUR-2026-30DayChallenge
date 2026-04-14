@@ -1,0 +1,291 @@
+---
+title: "Untitled"
+format: html
+---
+
+```{r}
+library(tidyverse)
+library(ggplot2)
+library(ggridges)
+library(ggview)
+library(ggtext)
+
+# Mock data creation based on your 10-12 "Study Airports"
+set.norm.delay <- function(n, mean, sd) pmax(0, rnorm(n, mean, sd))
+
+study_airports <- data.frame(
+  airport = rep(c("GRU", "GIG", "BSB", "CDG", "FRA", "MAD", "LHR", "AMS", "CPH", "SCL"), each = 100),
+  region = rep(c("Brazil", "Europe"), each = 500),
+  # Simulate physical "friction": some airports have wider, heavier distributions
+  delay = c(
+    set.norm.delay(100, 15, 10), set.norm.delay(100, 12, 5), set.norm.delay(100, 8, 4), # BRA
+    set.norm.delay(100, 20, 15), set.norm.delay(100, 18, 12), set.norm.delay(100, 14, 8), # EUR
+    set.norm.delay(100, 10, 5), set.norm.delay(100, 25, 20), set.norm.delay(100, 5, 2), # EUR
+    set.norm.delay(100, 12, 6) # BRA
+  )
+)
+
+# Refined Proposal: Distribution of 'Friction' (Delay) by Airport
+ggplot(study_airports, aes(x = delay, y = airport, fill = region)) +
+  # 'Physical' representation using density ridges
+  geom_density_ridges(alpha = 0.7, scale = 1.5, rel_min_height = 0.01) +
+  # Adding a vertical line for a 'threshold' of physical resistance
+  geom_vline(xintercept = 15, linetype = "dashed", color = "grey40") +
+  scale_fill_manual(values = c("Brazil" = "#2ecc71", "Europe" = "#3498db")) +
+  labs(
+    title = "The Physical Weight of Delay",
+    subtitle = "Distribution of arrival delays across BRA-EUR study airports",
+    x = "Minutes of Delay (Friction)",
+    y = "Study Airport",
+    fill = "Region"
+  ) +
+  theme_minimal() +
+  theme(panel.grid.minor = element_blank())
+```
+
+```{r}
+# Read and combine data
+bra_2023 <- read_csv("./data/BRA-punc-2023.csv") |> mutate(region = "BRA", year = 2023, show_col_types = FALSE)
+bra_2024 <- read_csv("./data/BRA-punc-2024.csv") |> mutate(region = "BRA", year = 2024, show_col_types = FALSE)
+eur_2023 <- read_csv("./data/EUR-punc-2023.csv") |> mutate(region = "EUR", year = 2023, show_col_types = FALSE)
+eur_2024 <- read_csv("./data/EUR-punc-2024.csv") |> mutate(region = "EUR", year = 2024, show_col_types = FALSE)
+
+all_data <- bind_rows(bra_2023, bra_2024, eur_2023, eur_2024) |> 
+  select(-c(N_VALID, N_VALID_MONTH))
+
+# Convert bin columns to long format and calculate delay contributions
+# Map each bin to its midpoint delay value
+bin_midpoints <- tribble(
+  ~bin, ~delay_minutes,
+  "(-INF,-60]", -70,     # Assume early arrivals average -70 min
+  "(-60,-55]", -57.5,
+  "(-55,-50]", -52.5,
+  "(-50,-45]", -47.5,
+  "(-45,-40]", -42.5,
+  "(-40,-35]", -37.5,
+  "(-35,-30]", -32.5,
+  "(-30,-25]", -27.5,
+  "(-25,-20]", -22.5,
+  "(-20,-15]", -17.5,
+  "(-15,-10]", -12.5,
+  "(-10,-5]", -7.5,
+  "(-5,0]", -2.5,
+  "(0,5)", 2.5,
+  "[5,10)", 7.5,
+  "[10,15)", 12.5,
+  "[15,20)", 17.5,
+  "[20,25)", 22.5,
+  "[25,30)", 27.5,
+  "[30,35)", 32.5,
+  "[35,40)", 37.5,
+  "[40,45)", 42.5,
+  "[45,50)", 47.5,
+  "[50,55)", 52.5,
+  "[55,60)", 57.5,
+  "[60,INF)", 70        # Assume extreme delays average 70 min
+)
+
+delay_data <- all_data |>
+  pivot_longer(
+    cols = matches("^\\(|^\\["),  # All delay bin columns
+    names_to = "bin",
+    values_to = "n_flights"
+  ) |>
+  left_join(bin_midpoints, by = "bin") |>
+  # Calculate total delay for this bin (flights × midpoint delay)
+  mutate(
+    total_delay = n_flights * delay_minutes,
+    # Only count positive delays for inequality analysis
+    positive_delay = if_else(delay_minutes > 0, total_delay, 0),
+    positive_flights = if_else(delay_minutes > 0, n_flights, 0)
+  ) |>
+  # Aggregate back to airport-date-phase level
+  group_by(APT, DATE, PHASE, region, year) |>
+  summarise(
+    total_delay_min = sum(positive_delay, na.rm = TRUE),
+    n_delayed_flights = sum(positive_flights, na.rm = TRUE),
+    n_total_flights = sum(n_flights, na.rm = TRUE),  # Count entries instead of N_VALID
+    .groups = "drop"
+  )
+
+avg_daily_delay <- delay_data |> 
+  group_by(APT, DATE, region, year) |> 
+  reframe(CHECK = n(), across(total_delay_min:n_total_flights, ~ sum(.x))) |> 
+  mutate(AVG_DLY = total_delay_min / n_total_flights)
+```
+
+```{r}
+avg_daily_delay |> 
+  mutate(APT = fct_reorder(APT, AVG_DLY, .fun = median)
+         ,region = ifelse(region == "BRA", "Brazil","Europe")
+  ) |> 
+  
+ggplot(aes(x = AVG_DLY, y = APT, fill = stat(x))) +
+  
+  geom_density_ridges_gradient(scale = 1.5, rel_min_height = 0.01) +
+  # Use a color scale that shifts at 15
+  scale_fill_gradient2(
+    low = "#2ecc71", # Green (Healthy)
+    mid = "#f1c40f", # Yellow (Warning)
+    high = "#e74c3c", # Red (Yielding)
+    midpoint = 5
+  ) +
+  
+  
+  # 'Physical' representation using density ridges
+  #geom_density_ridges(alpha = 0.7, scale = 1.5, rel_min_height = 0.01) +
+  # Adding a vertical line for a 'threshold' of physical resistance
+  geom_vline(xintercept = 15, linetype = "dotted", color = "red", size = 0.8) + annotate("text", x = 17, y = 1.5, label = "Yield Point - \non-time-performance threshold (15min)", 
+           color = "red", angle = 90, hjust = 0, size = 3, fontface = "bold") +
+  
+  #scale_fill_manual(values = c("Brazil" = "#2ecc71", "Europe" = "#3498db")) +
+  scale_x_continuous(limits = c(0,60), expand = c(0,0)) +
+ 
+  # facets to handle the regions
+  facet_wrap(~region, ncol = 1, scales = "free_y") +
+  
+ 
+  labs(
+    title = "The Physical Weight of Delay",
+    subtitle = "Distribution of arrival delays across BRA-EUR study airports",
+    x = "Minutes of Delay (Friction)",
+    y = NULL,
+    fill = "Region"
+  ) +
+  
+  theme_minimal() +
+  theme(
+    plot.title.position = "plot"
+    ,plot.subtitle.position = "plot"
+    ,plot.caption.position = "plot"
+    ,panel.grid.minor = element_blank()
+    ) +
+  canvas(width = 8, height = 8, dpi = 300)
+```
+
+
+
+```{r}
+#library(scales) # Required for the rescale function
+
+this_width  <- 8
+this_height <- 8
+this_dpi    <- 300
+
+our_title <- "<span style='font-size:12pt'><strong>Chart-Challenge Day 11 - 'Physical'</strong></span><br>**Systemic Stress: The Physicality of Delay!**"
+
+our_subtitle <- "How resilient are the regional networks? This chart treats delay as 'physical friction.' 
+An efficient system is **elastic**, with average daily delays snapping back toward zero. 
+When a system is overstressed, it reaches a **yield point** (15 min) where delays become 'plastic'—permanently stretching the distribution into the red zone. 
+Brazil shows high structural integrity ('operational elasticity'), while Europe exhibits systemic drag and exhibits 'plastic deformation' beyond the 15-minute yield point."
+
+our_caption <- "DECEA Performance Section & EUROCONTROL PRU"
+
+# for panel specific annotations, we create a data frame with the "region"
+panel_annotation <- data.frame(
+  region = c("Brazil", "Europe", "Brazil"),
+  AVG_DLY = c(35, 35, 40),
+  APT = c("SBCF", "EGLL", "SBGR"), #  y-axis anchors
+  label = c(
+    "Brazil:\nHigh resilience. Most days\nstay 'elastic' and recover\nbelow the threshold.\nDelays are situational.",
+    "Eurpe:\nStructural Drag. Distributions\nare 'stretched'—delays are\noften unrecovered and extend massively.\nEurope shows symptoms of a strained system \nwhere delay is a feature.",
+    # --------- OTP label
+    "Yield Point - industry standard for \non-time-performance threshold (15min)"
+  )
+)
+
+otp_pointer <- data.frame(
+  region = "Brazil",
+  x_start = 38,    # Near your annotation text
+  x_end = 16,    # Just before the dotted line
+ # y_start = "SBGR", # Anchor to the same airport as the label
+ #  y_end = "SBGR"
+  # nudge arrow a bit
+  y_numeric = match("SBGR", levels(fct_reorder(avg_daily_delay$APT, avg_daily_delay$AVG_DLY))) + 0.3,
+  label_y = "SBGR"
+)
+
+
+# Define your physical thresholds - now hard-coded, c.f. below
+# limit_min <- 0
+# limit_warn <- 10
+# limit_yield <- 15
+# limit_max <- 70 # max delay cutoff
+
+avg_daily_delay |> 
+  mutate(APT = fct_reorder(APT, AVG_DLY, .fun = median)
+         ,region = ifelse(region == "BRA", "Brazil","Europe")
+  ) |> 
+  
+ggplot(aes(x = AVG_DLY, y = fct_reorder(APT, AVG_DLY), fill = stat(x))) +
+  
+  geom_density_ridges_gradient(scale = 1.5, rel_min_height = 0.01, color = "white", size = 0.2) +
+  scale_fill_gradientn(
+    colors = c("#2ecc71", "#f1c40f", "#e67e22", "#e74c3c", "#8e44ad"),
+    #values = rescale(c(limit_min, limit_warn, limit_yield, 25, limit_max)),
+    values = rescale(c(0, 5, 15, 30, 60)),
+    name = "Minutes of \n'Friction'"
+  ) +
+  
+   # vertical line for a 'threshold' of physical resistance
+  geom_vline(xintercept = limit_yield, linetype = "dotted", color = "black", size = 0.8) +
+  
+  geom_segment(
+    data = otp_pointer,
+    #aes(x = x_start, xend = x_end, y = y_start, yend = y_end),
+    aes(x = x_start, xend = x_end, y = y_numeric, yend = y_numeric), # nudge!
+    inherit.aes = FALSE,
+    arrow = arrow(length = unit(0.2, "cm"), type = "closed"),
+    color = "grey60",
+    size = 0.5,
+    vjust = -.5
+  ) +
+  
+  # Regional Annotations in the whitespace (adjust x/y based on your specific scale)
+  geom_text(data = panel_annotation
+            , aes(x = AVG_DLY, y = APT, label = label),
+            inherit.aes = FALSE, hjust = 0, size = 3.5
+            , fontface = "italic", 
+            lineheight = 0.9, color = "grey20"
+            ) +
+  
+  facet_wrap(~region, ncol = 1, scales = "free_y") +
+  
+  #-------- labs
+  labs(x = "daily average delay (min, 'friction')", y = NULL
+       ,title    = our_title
+       ,subtitle = our_subtitle
+       ,caption  = our_caption
+       ) +
+  
+  #-------- theme and text -------------------------
+  theme_minimal() +
+  theme(
+     plot.title = element_textbox_simple(margin = margin(b = 10), lineheight = 1.2)
+    ,plot.title.position = "plot"
+    ,plot.subtitle = element_textbox_simple(margin = margin(b = 10))
+    ,plot.subtitle.position = "plot"
+    ,plot.caption = element_textbox_simple(margin = margin(t = 15))
+    ,plot.caption.position = "plot"
+    
+    ,strip.text = element_text(face = "bold", hjust = 0)
+    
+    ,axis.title.x = element_text(size = rel(0.8))
+    
+    ,legend.position = c(0.98, 1.34)             # near top-right
+    ,legend.justification = c("right", "top")
+    ,legend.direction = "horizontal"
+    ,legend.title = element_text(size = rel(0.8), vjust = 1) 
+    ,legend.text  = element_text(size = rel(0.7))
+    
+    
+    ,panel.grid.minor = element_blank()
+    
+    ) +
+  canvas(width = this_width, height = this_height, dpi = this_dpi)
+```
+
+```{r}
+ggsave("./figures/day11-ridges-delay-friction.png", width = this_width, height = this_height, dpi = this_dpi)
+```
+
