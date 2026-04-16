@@ -113,3 +113,17 @@ Conceptual building blocks
 * regime shading and labelled trend lines to support the ecosystem metaphor without overwhelming the payload
 
 ![Day-13 ecosystem](figures/day13-ecosystem.png)
+
+### Day 16 - "simple causal graph + evidence panels"
+
+For Day 16 we used a deliberately modest causal story: daily demand can create traffic pressure, and higher traffic pressure is consistent with more delay. The chart keeps the hypothesis and the evidence close together. A small directed graph labels which links are directly observed, which are simple proxies, and which remain interpretation; two evidence panels then show the airport-day association and the thicker delay tail on higher-pressure days.
+
+Conceptual building blocks
+
+* daily airport movements from `EUR-apt-tfc-2025.csv`
+* binned punctuality outcomes from `PBWG-EUR-punc-2025.csv`
+* a within-airport traffic pressure percentile to compare busy and quiet days fairly
+* `{ggraph}` / `{tidygraph}` for the causal sketch
+* `{patchwork}`, `{ggtext}`, and `{ggrepel}` for evidence panels, paragraph-style text, and selected outlier labels
+
+![Day-16 causal evidence](figures/day16-causal-evidence-social.png)

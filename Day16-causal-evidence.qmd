@@ -1,0 +1,532 @@
+---
+title: "Day 16 - Simple Causal Graph + Evidence Panels"
+format: html
+---
+
+## Aim
+
+For today's prompt we keep the causal story deliberately small. The chart does not claim to identify causal effects. Instead, it presents a compact hypothesis - daily demand creates traffic pressure, and traffic pressure is associated with delay - then attaches simple evidence panels to the observable links.
+
+The working language is modest by design: "consistent with", "proxy", and "observational".
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(ggplot2)
+library(patchwork)
+library(ggraph)
+library(tidygraph)
+library(ggtext)
+library(ggrepel)
+library(scales)
+library(grid)
+```
+
+## Data Preparation
+
+```{r}
+#| label: data-preparation
+
+bin_midpoints <- tribble(
+  ~BIN, ~DLY_MIN,
+  "(-INF,-60]", -70,
+  "(-60,-55]", -57.5,
+  "(-55,-50]", -52.5,
+  "(-50,-45]", -47.5,
+  "(-45,-40]", -42.5,
+  "(-40,-35]", -37.5,
+  "(-35,-30]", -32.5,
+  "(-30,-25]", -27.5,
+  "(-25,-20]", -22.5,
+  "(-20,-15]", -17.5,
+  "(-15,-10]", -12.5,
+  "(-10,-5]", -7.5,
+  "(-5,0]", -2.5,
+  "(0,5)", 2.5,
+  "[5,10)", 7.5,
+  "[10,15)", 12.5,
+  "[15,20)", 17.5,
+  "[20,25)", 22.5,
+  "[25,30)", 27.5,
+  "[30,35)", 32.5,
+  "[35,40)", 37.5,
+  "[40,45)", 42.5,
+  "[45,50)", 47.5,
+  "[50,55)", 52.5,
+  "[55,60)", 57.5,
+  "[60,INF)", 70
+)
+
+airport_names <- c(
+  EDDF = "Frankfurt",
+  EDDM = "Munich",
+  EGLL = "Heathrow",
+  EHAM = "Amsterdam",
+  LEBL = "Barcelona",
+  LEMD = "Madrid",
+  LFPG = "Paris CDG",
+  LGAV = "Athens",
+  LIRF = "Rome Fiumicino",
+  LPPT = "Lisbon",
+  LSZH = "Zurich",
+  LTFM = "Istanbul"
+)
+
+traffic_daily <- readr::read_csv(
+  "./data/EUR-apt-tfc-2025.csv",
+  show_col_types = FALSE
+) |>
+  mutate(MOVEMENTS = ARRS + DEPS) |>
+  group_by(ICAO) |>
+  mutate(
+    PRESSURE = MOVEMENTS / quantile(MOVEMENTS, 0.95, na.rm = TRUE),
+    PRESSURE_PCTL = percent_rank(MOVEMENTS)
+  ) |>
+  ungroup()
+
+delay_daily <- readr::read_csv(
+  "./data/PBWG-EUR-punc-2025.csv",
+  show_col_types = FALSE
+) |>
+  pivot_longer(
+    cols = matches("^\\(|^\\["),
+    names_to = "BIN",
+    values_to = "N_FLTS"
+  ) |>
+  left_join(bin_midpoints, by = "BIN") |>
+  mutate(
+    N_DLY_15 = if_else(DLY_MIN >= 15, N_FLTS, 0),
+    POS_DLY_MIN = pmax(DLY_MIN, 0) * N_FLTS
+  ) |>
+  group_by(ICAO, DATE, PHASE) |>
+  summarise(
+    N_PHASE = sum(N_FLTS, na.rm = TRUE),
+    MEAN_DLY = sum(N_FLTS * DLY_MIN, na.rm = TRUE) / N_PHASE,
+    SHARE_DLY_15 = sum(N_DLY_15, na.rm = TRUE) / N_PHASE,
+    POS_DLY_PER_FLT = sum(POS_DLY_MIN, na.rm = TRUE) / N_PHASE,
+    .groups = "drop"
+  ) |>
+  group_by(ICAO, DATE) |>
+  summarise(
+    N_FLTS = sum(N_PHASE, na.rm = TRUE),
+    MEAN_DLY = sum(MEAN_DLY * N_PHASE, na.rm = TRUE) / N_FLTS,
+    SHARE_DLY_15 = sum(SHARE_DLY_15 * N_PHASE, na.rm = TRUE) / N_FLTS,
+    POS_DLY_PER_FLT = sum(POS_DLY_PER_FLT * N_PHASE, na.rm = TRUE) / N_FLTS,
+    .groups = "drop"
+  )
+
+evidence_daily <- traffic_daily |>
+  inner_join(delay_daily, by = join_by(ICAO, DATE)) |>
+  mutate(
+    APT_LAB = recode(ICAO, !!!as.list(airport_names), .default = ICAO),
+    PRESSURE_GROUP = case_when(
+      PRESSURE_PCTL <= 0.25 ~ "Lower-pressure days",
+      PRESSURE_PCTL >= 0.75 ~ "Higher-pressure days",
+      TRUE ~ "Middle days"
+    ),
+    PRESSURE_GROUP = factor(
+      PRESSURE_GROUP,
+      levels = c("Lower-pressure days", "Higher-pressure days", "Middle days")
+    )
+  )
+
+delay_tail <- readr::read_csv(
+  "./data/PBWG-EUR-punc-2025.csv",
+  show_col_types = FALSE
+) |>
+  pivot_longer(
+    cols = matches("^\\(|^\\["),
+    names_to = "BIN",
+    values_to = "N_FLTS"
+  ) |>
+  left_join(bin_midpoints, by = "BIN") |>
+  inner_join(
+    evidence_daily |>
+      filter(PRESSURE_GROUP != "Middle days") |>
+      select(ICAO, DATE, PRESSURE_GROUP),
+    by = join_by(ICAO, DATE)
+  ) |>
+  mutate(
+    BIN_GROUP = case_when(
+      DLY_MIN < -15 ~ "Early >15",
+      DLY_MIN < 0 ~ "Early 0-15",
+      DLY_MIN < 15 ~ "Late 0-15",
+      DLY_MIN < 30 ~ "Late 15-30",
+      TRUE ~ "Late >30"
+    ),
+    BIN_GROUP = factor(
+      BIN_GROUP,
+      levels = c("Early >15", "Early 0-15", "Late 0-15", "Late 15-30", "Late >30")
+    )
+  ) |>
+  group_by(PRESSURE_GROUP, BIN_GROUP) |>
+  summarise(N_FLTS = sum(N_FLTS, na.rm = TRUE), .groups = "drop") |>
+  group_by(PRESSURE_GROUP) |>
+  mutate(SHARE = N_FLTS / sum(N_FLTS)) |>
+  ungroup()
+
+pressure_summary <- evidence_daily |>
+  group_by(PRESSURE_GROUP) |>
+  summarise(
+    AVG_SHARE_DLY_15 = mean(SHARE_DLY_15, na.rm = TRUE),
+    AVG_POS_DLY = mean(POS_DLY_PER_FLT, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+delta_dly_15 <- pressure_summary |>
+  filter(PRESSURE_GROUP %in% c("Lower-pressure days", "Higher-pressure days")) |>
+  arrange(PRESSURE_GROUP) |>
+  summarise(delta = diff(AVG_SHARE_DLY_15)) |>
+  pull(delta)
+
+outlier_days <- evidence_daily |>
+  filter(PRESSURE_PCTL >= 0.85) |>
+  group_by(ICAO) |>
+  slice_max(SHARE_DLY_15, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  slice_max(SHARE_DLY_15, n = 6, with_ties = FALSE) |>
+  mutate(
+    OUTLIER_LAB = paste0(APT_LAB, "\n", format(DATE, "%d %b"))
+  )
+```
+
+## Final Candidate
+
+```{r}
+#| label: final-candidate
+#| fig-width: 10
+#| fig-height: 10
+
+palette_edge <- c(
+  "Constructed proxy" = "#5a7d8c",
+  "Observed association" = "#c8534f",
+  "Interpretation" = "#7a7a7a"
+)
+
+palette_pressure <- c(
+  "Lower-pressure days" = "#5a7d8c",
+  "Higher-pressure days" = "#c8534f"
+)
+
+graph_nodes <- tibble(
+  name = c("demand", "pressure", "delay", "disruption"),
+  label = c(
+    "Daily demand<br><span style='font-size:8pt'>ARRS + DEPS</span>",
+    "Traffic pressure<br><span style='font-size:8pt'>within-airport proxy</span>",
+    "Delay outcome<br><span style='font-size:8pt'>share delayed 15+ min</span>",
+    "Network disruption<br><span style='font-size:8pt'>plausible, not tested</span>"
+  ),
+  x = c(0, 1, 2, 3),
+  y = c(0, 0, 0, 0),
+  fill = c("#f8f4e9", "#edf4f6", "#fbefef", "#f3f3f3")
+)
+
+graph_edges <- tibble(
+  from = c("demand", "pressure", "delay"),
+  to = c("pressure", "delay", "disruption"),
+  evidence = c("Constructed proxy", "Observed association", "Interpretation"),
+  label = c("proxy", "consistent with", "not shown")
+)
+
+graph_edge_labels <- tibble(
+  x = c(0.5, 1.5, 2.5),
+  y = c(0.16, 0.16, 0.16),
+  evidence = c("Constructed proxy", "Observed association", "Interpretation"),
+  label = c("proxy", "consistent with", "not shown")
+)
+
+causal_graph <- tbl_graph(
+  nodes = graph_nodes,
+  edges = graph_edges,
+  directed = TRUE
+)
+
+p_graph <- ggraph(causal_graph, layout = "manual", x = x, y = y) +
+  geom_edge_link(
+    aes(edge_colour = evidence, edge_linetype = evidence),
+    arrow = arrow(length = unit(4.5, "mm"), type = "closed"),
+    start_cap = circle(8, "mm"),
+    end_cap = circle(9, "mm"),
+    linewidth = 1.1
+  ) +
+  geom_label(
+    data = graph_edge_labels,
+    aes(x = x, y = y, label = label, colour = evidence),
+    inherit.aes = FALSE,
+    linewidth = 0,
+    label.padding = unit(0.12, "lines"),
+    fill = "white",
+    size = 3.1,
+    show.legend = FALSE
+  ) +
+  geom_richtext(
+    data = graph_nodes,
+    aes(x = x, y = y, label = label, fill = fill),
+    inherit.aes = FALSE,
+    label.color = "#555555",
+    label.r = unit(0.10, "lines"),
+    label.padding = unit(0.28, "lines"),
+    size = 3.15,
+    lineheight = 0.92,
+    colour = "#222222"
+  ) +
+  scale_fill_identity() +
+  scale_edge_colour_manual(values = palette_edge, name = NULL) +
+  scale_edge_linetype_manual(
+    values = c(
+      "Constructed proxy" = "solid",
+      "Observed association" = "solid",
+      "Interpretation" = "22"
+    ),
+    name = NULL
+  ) +
+  scale_colour_manual(values = palette_edge, name = NULL) +
+  coord_cartesian(xlim = c(-0.18, 3.18), ylim = c(-0.35, 0.35), clip = "off") +
+  labs(title = "Hypothesised causal chain") +
+  theme_void(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", colour = "#222222", margin = margin(b = 4)),
+    legend.position = "none",
+    plot.margin = margin(0, 18, 0, 18)
+  )
+
+p_pressure_delay <- ggplot(
+  evidence_daily,
+  aes(x = PRESSURE_PCTL, y = SHARE_DLY_15)
+) +
+  annotate("rect", xmin = 0.75, xmax = Inf, ymin = -Inf, ymax = Inf, fill = "#f8dddd", alpha = 0.55) +
+  geom_point(aes(size = MOVEMENTS), alpha = 0.18, colour = "#3f5360") +
+  geom_smooth(method = "lm", formula = y ~ x, se = TRUE, colour = "#c8534f", fill = "#f1b6b3", linewidth = 1) +
+  geom_label_repel(
+    data = outlier_days,
+    aes(label = OUTLIER_LAB),
+    seed = 16,
+    size = 2.7,
+    lineheight = 0.88,
+    label.size = 0,
+    label.padding = unit(0.12, "lines"),
+    fill = alpha("#fffdf8", 0.86),
+    colour = "#273942",
+    box.padding = 0.35,
+    point.padding = 0.35,
+    min.segment.length = 0,
+    segment.color = alpha("#273942", 0.55),
+    segment.size = 0.25,
+    max.overlaps = Inf,
+    show.legend = FALSE
+  ) +
+  scale_x_continuous(labels = percent_format(accuracy = 1)) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_size_continuous(range = c(0.4, 2.8), guide = "none") +
+  coord_cartesian(
+    xlim = c(0, 1),
+    ylim = c(0, max(evidence_daily$SHARE_DLY_15, na.rm = TRUE) * 1.08)
+  ) +
+  labs(
+    title = "Pressure and delay move together",
+    subtitle = "Each dot is one airport-day. Pressure is the daily traffic percentile within that airport's own 2025 distribution.",
+    x = "Traffic pressure percentile",
+    y = "Flights delayed 15+ min"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", colour = "#222222"),
+    plot.subtitle = element_textbox_simple(size = 8.7, lineheight = 1.05, margin = margin(b = 5)),
+    panel.grid.minor = element_blank(),
+    axis.title = element_text(face = "bold", colour = "#333333"),
+    plot.margin = margin(4, 8, 4, 8)
+  )
+
+p_tail <- delay_tail |>
+  filter(PRESSURE_GROUP != "Middle days") |>
+  ggplot(aes(x = SHARE, y = BIN_GROUP, fill = PRESSURE_GROUP)) +
+  geom_col(
+    position = position_dodge2(width = 0.74, preserve = "single"),
+    width = 0.64,
+    alpha = 0.92
+  ) +
+  scale_fill_manual(values = palette_pressure, name = NULL) +
+  scale_x_continuous(labels = percent_format(accuracy = 1), expand = expansion(mult = c(0, 0.06))) +
+  labs(
+    title = "Busy days carry a thicker delay tail",
+    subtitle = "Comparing the lower and upper quartile of each airport's daily traffic.",
+    x = "Share of flights",
+    y = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    plot.title = element_text(face = "bold", colour = "#222222"),
+    plot.subtitle = element_textbox_simple(size = 8.7, lineheight = 1.05, margin = margin(b = 5)),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "bottom",
+    legend.text = element_text(size = 8),
+    axis.title = element_text(face = "bold", colour = "#333333"),
+    plot.margin = margin(4, 8, 4, 8)
+  )
+
+p_notes <- ggplot() +
+  annotate(
+    "richtext",
+    x = 0,
+    y = 1,
+    hjust = 0,
+    vjust = 1,
+    label = paste0(
+      "<b>Reading the evidence status</b><br>",
+      "<span style='color:#5a7d8c'>Constructed proxy</span>: daily movements are used as a simple pressure measure.<br>",
+      "<span style='color:#c8534f'>Observed association</span>: higher pressure days tend to have more 15+ minute delay.<br>",
+      "<span style='color:#7a7a7a'>Interpretation</span>: wider disruption is plausible, but not estimated here."
+    ),
+    label.color = NA,
+    fill = NA,
+    size = 3.1,
+    lineheight = 1.08
+  ) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+  theme_void() +
+  theme(plot.margin = margin(0, 18, 0, 18))
+
+p_notes_social <- ggplot() +
+  annotate(
+    "richtext",
+    x = 0,
+    y = 1,
+    hjust = 0,
+    vjust = 1,
+    label = paste0(
+      "<b>Evidence status:</b> ",
+      "<span style='color:#5a7d8c'>proxy</span> = daily movements as pressure; ",
+      "<span style='color:#c8534f'>observed association</span> = pressure vs delay; ",
+      "<span style='color:#7a7a7a'>interpretation</span> = disruption not estimated."
+    ),
+    label.color = NA,
+    fill = NA,
+    size = 2.85,
+    lineheight = 1.03
+  ) +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+  theme_void() +
+  theme(plot.margin = margin(0, 18, 0, 18))
+
+our_title <- paste0(
+  "<span style='font-size:12pt'><strong>Chart-Challenge Day 16 - Simple causal graph + evidence panels</strong></span><br>",
+  "<strong>A small causal story, with the evidence kept attached</strong>"
+)
+
+our_subtitle <- paste0(
+  "The directed graph states a deliberately modest hypothesis: more daily demand can create traffic pressure, ",
+  "and higher pressure is <strong>consistent with</strong> more delay. The evidence panels use 2025 European airport-day data only: ",
+  "daily arrivals plus departures define a within-airport pressure proxy, while binned punctuality data estimate the share of flights delayed by 15 minutes or more. ",
+  "Higher-pressure days show about <strong>", percent(delta_dly_15, accuracy = 0.1),
+  "</strong> more flights in the 15+ minute delay group than lower-pressure days. This is observational evidence, not causal identification."
+)
+
+our_caption <- "DECEA Performance Section & EUROCONTROL PRU"
+
+p_day16_candidate <- (
+  p_graph / p_notes / (p_pressure_delay | p_tail)
+) +
+  plot_layout(heights = c(0.58, 0.26, 1.55)) +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 18,
+        lineheight = 1.08,
+        margin = margin(b = 8),
+        colour = "#181818"
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 10.5,
+        lineheight = 1.08,
+        margin = margin(b = 12),
+        colour = "#333333"
+      ),
+      plot.caption = element_textbox_simple(
+        size = 9,
+        colour = "#555555",
+        hjust = 1,
+        margin = margin(t = 10)
+      ),
+      plot.background = element_rect(fill = "#fffdf8", colour = NA),
+      plot.margin = margin(12, 14, 12, 14)
+    )
+  )
+
+p_day16_candidate
+```
+
+## Social Crop
+
+```{r}
+#| label: social-crop
+#| fig-width: 10
+#| fig-height: 8
+
+p_day16_social <- (
+  p_graph / p_notes_social / (p_pressure_delay | p_tail)
+) +
+  plot_layout(heights = c(0.44, 0.24, 1.55)) +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 15,
+        lineheight = 1.05,
+        margin = margin(b = 6),
+        colour = "#181818"
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 9.2,
+        lineheight = 1.05,
+        margin = margin(b = 8),
+        colour = "#333333"
+      ),
+      plot.caption = element_textbox_simple(
+        size = 8.2,
+        colour = "#555555",
+        hjust = 1,
+        margin = margin(t = 8)
+      ),
+      plot.background = element_rect(fill = "#fffdf8", colour = NA),
+      plot.margin = margin(10, 12, 10, 12)
+    )
+  )
+
+p_day16_social
+```
+
+## Save Draft
+
+```{r}
+#| label: save-draft
+#| eval: false
+
+ggsave(
+  "./figures/day16-causal-evidence.png",
+  plot = p_day16_candidate,
+  width = 10,
+  height = 10,
+  dpi = 300,
+  units = "in"
+)
+
+ggsave(
+  "./figures/day16-causal-evidence-social.png",
+  plot = p_day16_social,
+  width = 10,
+  height = 8,
+  dpi = 300,
+  units = "in"
+)
+```
