@@ -1,0 +1,339 @@
+---
+title: "Day 19 - Evolution"
+format: html
+---
+
+## Aim
+
+Today's prompt is interpreted as an aviation recovery arc: how did traffic evolve from the
+pre-pandemic baseline through the latest 2024/2025 data?
+
+The chart keeps the method simple. We rebuild a complete European network-traffic series
+from the PBWG archive, pair it with the Brazilian daily traffic series from the 2025 project,
+index both regions to their own 2019 median, and then show daily points with a 7-day rolling
+median line.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(arrow)
+library(ggtext)
+library(scales)
+library(zoo)
+```
+
+## Build Daily Network Files
+
+We run this once to generate the underlying data files for Day 19.
+
+```{}
+#| label: build-daily-network-files
+
+dir.create("data", showWarnings = FALSE)
+
+network_dir <- "../PBWG-data/network-traffic"
+
+read_eur_network <- function(path) {
+  readr::read_csv(path, show_col_types = FALSE) |>
+    transmute(
+      DATE = as.Date(DATE),
+      REG = "EUR",
+      FLTS = as.numeric(FLTS),
+      SOURCE = basename(path),
+      IS_FIX = str_detect(basename(path), "fix")
+    )
+}
+
+eur_regular_files <- file.path(
+  network_dir,
+  paste0("PBWG-EUR-network-traffic-", 2021:2025, ".csv")
+)
+
+eur_fix_files <- file.path(
+  network_dir,
+  c(
+    "PBWG-EUR-network-traffic-2019-fix.csv",
+    "PBWG-EUR-network-traffic-2020-fix.csv",
+    "PBWG-EUR-network-traffic-2024-fix.csv"
+  )
+)
+
+eur_network_daily <- purrr::map_dfr(c(eur_regular_files, eur_fix_files), read_eur_network) |>
+  arrange(DATE, desc(IS_FIX)) |>
+  group_by(DATE, REG) |>
+  summarise(FLTS = first(FLTS), .groups = "drop") |>
+  arrange(DATE) |>
+  mutate(
+    YEAR = lubridate::year(DATE),
+    ROLL_MED_7 = zoo::rollmedian(FLTS, k = 7, fill = NA, align = "center")
+  )
+
+bra_network_daily <- arrow::read_parquet("../BRA-EUR-2025/data/ndf_bra_totalbr_daily.parquet") |>
+  transmute(
+    DATE = as.Date(DATE),
+    REG = "BRA",
+    FLTS = as.numeric(DLY_FLTS),
+    YEAR = lubridate::year(DATE),
+    ROLL_MED_7 = zoo::rollmedian(FLTS, k = 7, fill = NA, align = "center")
+  ) |>
+  arrange(DATE)
+
+readr::write_csv(eur_network_daily, "data/EUR-network-traffic-2019-2025.csv")
+readr::write_csv(bra_network_daily, "data/BRA-network-traffic-2019-2025.csv")
+```
+
+## Read Challenge Inputs
+
+```{r}
+#| label: read-challenge-inputs
+
+network_daily <- bind_rows(
+  readr::read_csv("data/EUR-network-traffic-2019-2025.csv", show_col_types = FALSE),
+  readr::read_csv("data/BRA-network-traffic-2019-2025.csv", show_col_types = FALSE)
+) |>
+  mutate(
+    DATE = as.Date(DATE),
+    REGION = recode(REG, BRA = "Brazil", EUR = "Europe")
+  )
+
+baseline_2019 <- network_daily |>
+  filter(YEAR == 2019) |>
+  summarise(
+    BASELINE = median(FLTS, na.rm = TRUE),
+    .by = REGION
+  )
+
+plot_data <- network_daily |>
+  left_join(baseline_2019, by = "REGION") |>
+  mutate(
+    INDEX_2019 = 100 * FLTS / BASELINE,
+    ROLL_INDEX_2019 = 100 * ROLL_MED_7 / BASELINE,
+    REGION = factor(REGION, levels = c("Brazil", "Europe"))
+  )
+
+recovery_summary <- plot_data |>
+  filter(YEAR %in% c(2020, 2025)) |>
+  summarise(
+    MED_INDEX = median(INDEX_2019, na.rm = TRUE),
+    .by = c(REGION, YEAR)
+  ) |>
+  mutate(MED_INDEX_LAB = percent(MED_INDEX / 100, accuracy = 1))
+
+label_data <- plot_data |>
+  filter(!is.na(ROLL_INDEX_2019), REGION %in% c("Brazil", "Europe")) |>
+  slice_max(DATE, n = 1, with_ties = FALSE, by = REGION) |>
+  select(REGION, DATE, ROLL_INDEX_2019)
+
+label_data2 <- tribble(
+  ~REGION, ~DATE, ~ROLL_INDEX_2019
+  ,"Europe", ymd("2024-03-01"), 65
+  ,"Brazil", ymd("2024-01-01"), 130
+)
+```
+
+## Final Candidate
+
+```{r}
+#| label: final-candidate
+#| fig-width: 11
+#| fig-height: 7
+
+palette_region <- c(
+  Brazil = "#52854C",
+  Europe = "#4E84C4"
+)
+
+
+# clean some data irritations
+plot_data <- plot_data |> filter(INDEX_2019 > 5)
+
+p_day19 <- ggplot(plot_data, aes(x = DATE, colour = REGION)) +
+  
+  # main payload plot - timeline ---------------
+  # daily indexed traffic
+  geom_point(aes(y = INDEX_2019) , alpha = 0.5 , size = 0.6, stroke = 0) +
+  # rolling median line 
+  geom_line(aes(y = ROLL_INDEX_2019), linewidth = 1.05, na.rm = TRUE) +
+  
+  scale_colour_manual(values = palette_region, guide = "none") +
+  scale_x_date(
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    expand = expansion(mult = c(0.01, 0.01))
+  ) +
+  scale_y_continuous(
+    labels = label_number(suffix = ""),
+    breaks = seq(0, 150, 25),
+    limits = c(0, 150),
+    expand = expansion(mult = c(0.01, 0.01))
+  ) +
+  geom_text(
+    data = label_data2,
+    aes(y = ROLL_INDEX_2019, label = REGION),
+  ##  hjust = 0,
+  #  nudge_x = -45,
+    size = rel(3),
+    fontface = "bold",
+    show.legend = FALSE
+  )  +
+  coord_cartesian(clip = "off")
+  
+p_day19
+```
+
+## Recovery Markers
+
+```{r}
+#| label: recovery-markers
+
+recovery_summary
+```
+
+## Move to Final Plot
+
+```{r}
+our_title <- paste0(
+  "<span style='font-size:12pt'><strong>Chart-Challenge Day 19 - Evolution (Timeline)</strong></span><br>",
+  "<strong>The Recovery Arc</strong>"
+)
+
+our_subtitle <- paste0(
+  # ---- hook ------------------------
+  "While both regions faced a staggering <b>80-90% traffic collapse</b> in 2020, their recovery 'evolution' follows distinct paths. ",
+  # --- context / what does it show -----------------
+  "<br>The chart shows the <b>daily traffic</b> indexed to each region's 2019 median (=100). Dots show daily data; the line is a centered <b>7-day rolling median</b>.",
+  # --- insights / take-awys -------------------------
+  "<br><b>Brazil</b> leveraged a strong domestic market to exceed pre-pandemic levels by late 2022, now trending <b>25% above</b> its 2019 median. ",
+  "<br><b>Europe</b> remains shaped by high seasonality showing peaking strong summers versus winter troughs. With 2025, Europe has reached the pre-COVID traffic levels."
+)
+
+our_caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Data: Brazil-Europe Comparison Report, available at: github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge"
+)
+```
+
+```{r}
+# our plot dimensions
+height = 7
+width  = 10
+dpi    = 300
+
+base_plot <- ggplot(plot_data, aes(x = DATE, colour = REGION)) +
+  
+  # COVID period annotations ---------------------------------------
+  annotate(
+    "rect",
+    xmin = as.Date("2020-02-25"),
+    xmax = as.Date("2022-03-31"),
+    ymin = -Inf,
+    ymax = Inf,
+    fill = "#d8d2c6",
+    alpha = 0.28
+  ) +
+  annotate(
+    "text",
+    x = as.Date("2020-03-01"),
+    y = 135,
+    hjust = 0,
+    label = "COVID shock, recovery with \npartial reopening, and \nstabilising return of air traffic \ndemand",
+    size = 12/.pt,
+    colour = "#6b6259"
+  ) + 
+  
+  # baseline - reference hline --------------------------------------
+  geom_hline(yintercept = 100, linewidth = 0.5, colour = "#6b6259") +
+  
+  # main payload plot - timeline ------------------------------------
+  # daily indexed traffic
+  geom_point(aes(y = INDEX_2019) , alpha = 0.5 , size = 0.6, stroke = 0)  + 
+  # rolling median line 
+  geom_line(aes(y = ROLL_INDEX_2019), linewidth = 1.05, na.rm = TRUE) +
+  
+  scale_colour_manual(values = palette_region, guide = "none") +
+  scale_x_date(
+    date_breaks = "1 year",
+    date_labels = "%Y",
+    expand = expansion(mult = c(0.01, 0.01))
+  ) +
+  scale_y_continuous(
+    labels = label_number(suffix = ""),
+    breaks = seq(0, 150, 25),
+    limits = c(0, 150),
+    expand = expansion(mult = c(0.01, 0.01))
+  ) +
+  geom_text(
+    data = label_data2,
+    aes(y = ROLL_INDEX_2019, label = REGION),
+  ##  hjust = 0,
+  #  nudge_x = -45,
+    size = 12/.pt,
+    fontface = "bold",
+    show.legend = FALSE
+  )  +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 12)
+```
+
+base_plot + ggview::canvas(width = width, height = height, dpi = dpi)
+
+```{r}
+p_day19_final <- base_plot +
+  labs(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    x = NULL,
+    y = "Traffic index, 2019 median = 100"
+  ) +
+  theme(
+    plot.title.position = "plot",
+    plot.title = element_textbox_simple(
+      size = rel(2),
+      lineheight = 1.08,
+      margin = margin(b = 8),
+      colour = "#181818"
+    ),
+    plot.subtitle.position = "plot", 
+    plot.subtitle = element_textbox_simple(
+      size = rel(1),
+      lineheight = 1.1,
+      margin = margin(b = 12),
+      colour = "#333333"
+    ),
+    plot.caption.position = "plot",
+    plot.caption = element_textbox_simple(
+      size = rel(0.9),
+      colour = "#555555",
+      hjust = 1,
+      margin = margin(t = 10)
+    )
+  )
+```
+
+visual inspection with final dimensions using ggview:
+   
+p_day19_final + ggview::canvas(width = width, height = height, dpi = dpi)    
+
+
+## Save Draft
+
+```{r}
+#| label: save-draft
+
+p_day19 <- p_day19_final
+
+ggsave(
+  "figures/day19-evolution.png",
+  plot = p_day19,
+  width = width,
+  height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```

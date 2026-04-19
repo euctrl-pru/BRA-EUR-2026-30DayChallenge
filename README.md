@@ -127,3 +127,17 @@ Conceptual building blocks
 * `{patchwork}`, `{ggtext}`, and `{ggrepel}` for evidence panels, paragraph-style text, and selected outlier labels
 
 ![Day-16 causal evidence](figures/day16-causal-evidence-social.png)
+
+### Day 19 - "evolution"
+
+For Day 19 we interpreted evolution as the recovery arc of air traffic after the COVID shock. The chart compares Brazilian and European daily network traffic from 2019 to 2025, indexing each region to its own 2019 median so that their recovery paths can be compared on a common scale. Daily dots preserve the operational texture, while the 7-day rolling median shows the broader trajectory.
+
+Conceptual building blocks
+
+* European daily network traffic rebuilt from the PBWG archive, including the 2019, 2020, and partial 2024 fix files
+* Brazilian daily network traffic from the 2025 Brazil-Europe data archive
+* a regional 2019 median baseline, with traffic shown as an index where 2019 median = 100
+* daily scatter points plus a centered 7-day rolling median line
+* `{ggtext}` and `{ggview}` for the final title, subtitle, caption, and output sizing
+
+![Day-19 evolution](figures/day19-evolution.png)

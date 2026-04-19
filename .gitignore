@@ -15,5 +15,9 @@ xx-rwb*
 xx-figures*
 aircraft_silhouettes/
 
+## gitignore some of the exploration stuff
+xx-BRA*
+data/BRA*
+
 # local draft social posts
 draft-post/

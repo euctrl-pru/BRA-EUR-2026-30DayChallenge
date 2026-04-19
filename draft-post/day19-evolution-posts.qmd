@@ -1,0 +1,30 @@
+---
+title: "Day 19 - Social Post Drafts"
+format: html
+---
+
+## LinkedIn
+
+Day 19 of the #30DayChartChallenge: Evolution.
+
+For today's prompt we looked at the recovery arc of air traffic after the COVID shock.
+
+The chart compares daily network traffic in Brazil and Europe from 2019 to 2025, indexed to each region's own 2019 median. Daily dots show the raw rhythm of operations, while the 7-day rolling median traces the recovery path.
+
+Both regions experienced a staggering collapse in 2020. But their evolution afterwards is different: Brazil's domestic-heavy market recovered earlier and moved above its 2019 baseline, while Europe shows a more seasonal return, with strong summer peaks and winter troughs before reaching pre-COVID traffic levels again in 2025.
+
+Joint work by DECEA Performance Section and EUROCONTROL PRU.
+
+#30DayChartChallenge #Day19 #DataVisualization #Aviation #AirTrafficManagement #RStats #ggplot2
+
+## Bluesky
+
+Day 19 #30DayChartChallenge: Evolution.
+
+The Recovery Arc: daily air traffic in Brazil and Europe, indexed to each region's 2019 median.
+
+Both regions collapsed in 2020, but the recovery paths differ: Brazil rises above baseline earlier; Europe returns with stronger seasonal waves.
+
+Joint work by DECEA Performance Section and EUROCONTROL PRU.
+
+#30DayChartChallenge #Day19 #DataViz #Aviation #RStats
