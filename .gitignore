@@ -19,5 +19,9 @@ aircraft_silhouettes/
 xx-BRA*
 data/BRA*
 
+# Quarto render artefacts; keep QMD source and exported figures instead
+Day*.html
+Day*_files/
+
 # local draft social posts
 draft-post/
