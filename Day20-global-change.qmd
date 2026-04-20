@@ -1,0 +1,357 @@
+---
+title: "Day 20 - Global Change"
+format: html
+---
+
+## Aim
+
+Today's prompt is interpreted as a small global-change timeline: how did taxi-out time
+shift across the Brazil and Europe study airports from 2023 to 2025?
+
+The chart keeps the method deliberately direct. We read the daily taxi-out aggregates,
+reduce them to airport-month summaries, then compare the monthly median across airports.
+The final version adds a compact message row above the timeline so the submission works
+both as a chart and as a quick read.
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(glue)
+library(ggtext)
+```
+
+## Read Taxi-Out Data
+
+The analytic taxi-out files are the daily airport-level performance extracts prepared for
+the Brazil-Europe comparison work. Each region contributes twelve study airports, with
+one file per year.
+
+```{r}
+#| label: read-txxt-data
+
+read_txxt <- function(path, region) {
+  readr::read_csv(path, show_col_types = FALSE) |>
+    transmute(
+      ICAO,
+      PHASE,
+      DATE = as_date(DATE),
+      MVTS_VALID,
+      TOT_TXXT,
+      region = region,
+      avg_txxt = TOT_TXXT / MVTS_VALID
+    )
+}
+
+bra_files <- list.files("data", pattern = "BRA-txxt", full.names = TRUE)
+eur_files <- list.files("data", pattern = "EUR-txxt", full.names = TRUE)
+
+raw_txxt <- bind_rows(
+  map(bra_files, read_txxt, region = "Brazil (BRA)"),
+  map(eur_files, read_txxt, region = "Europe (EUR)")
+)
+```
+
+## Build Monthly Series
+
+First we summarize each airport-month, then we summarize across airports. The central line
+is therefore the median airport's monthly taxi-out time; the band shows the median of the
+airport-level daily interquartile ranges.
+
+```{r}
+#| label: monthly-series
+
+monthly <- raw_txxt |>
+  filter(PHASE == "DEP", MVTS_VALID > 0) |>
+  mutate(month = floor_date(DATE, "month")) |>
+  summarise(
+    med = median(avg_txxt, na.rm = TRUE),
+    q25 = quantile(avg_txxt, 0.25, na.rm = TRUE),
+    q75 = quantile(avg_txxt, 0.75, na.rm = TRUE),
+    .by = c(ICAO, region, month)
+  ) |>
+  summarise(
+    med_median = median(med, na.rm = TRUE),
+    med_q25 = median(q25, na.rm = TRUE),
+    med_q75 = median(q75, na.rm = TRUE),
+    med_iqr = median(q75 - q25, na.rm = TRUE),
+    .by = c(region, month)
+  ) |>
+  mutate(region = factor(region, levels = c("Brazil (BRA)", "Europe (EUR)"))) |>
+  arrange(region, month)
+
+summary_stats <- monthly |>
+  mutate(year = year(month)) |>
+  filter(year %in% c(2023, 2025)) |>
+  summarise(avg = mean(med_median, na.rm = TRUE), .by = c(region, year)) |>
+  pivot_wider(names_from = year, values_from = avg) |>
+  mutate(
+    delta = `2025` - `2023`,
+    label = case_when(
+      abs(delta) < 0.3 ~ "stable",
+      delta > 0 ~ glue("+{round(delta, 1)} min"),
+      TRUE ~ glue("{round(delta, 1)} min")
+    )
+  )
+
+iqr_direction <- monthly |>
+  mutate(year = year(month)) |>
+  filter(year %in% c(2023, 2025)) |>
+  summarise(avg_iqr = mean(med_iqr, na.rm = TRUE), .by = c(region, year)) |>
+  pivot_wider(names_from = year, values_from = avg_iqr) |>
+  mutate(delta = `2025` - `2023`)
+
+eur_delta <- summary_stats |>
+  filter(region == "Europe (EUR)") |>
+  pull(label)
+
+bra_delta <- summary_stats |>
+  filter(region == "Brazil (BRA)") |>
+  pull(label)
+
+iqr_label <- if_else(
+  all(abs(iqr_direction$delta) < 0.3),
+  "mixed",
+  "shifting"
+)
+```
+
+## Base Plot
+
+This is the core timeline before the submission typography and message panels are added.
+
+```{r}
+#| label: base-plot
+#| fig-width: 10
+#| fig-height: 5
+
+col_bra <- "#0F6E56"
+col_eur <- "#185FA5"
+palette_region <- c("Brazil (BRA)" = col_bra, "Europe (EUR)" = col_eur)
+
+p_base <- ggplot(monthly, aes(x = month, colour = region, fill = region)) +
+  geom_ribbon(
+    aes(ymin = med_q25, ymax = med_q75),
+    alpha = 0.13,
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  geom_line(aes(y = med_median, linetype = region), linewidth = 1.1) +
+  geom_vline(
+    xintercept = as_date(c("2024-01-01", "2025-01-01")),
+    linetype = "dotted",
+    colour = "#B4B2A9",
+    linewidth = 0.4
+  ) +
+  annotate("text", x = as_date("2023-07-01"), y = 18.35,
+           label = "2023", size = 3.2, colour = "#888780", hjust = 0.5) +
+  annotate("text", x = as_date("2024-07-01"), y = 18.35,
+           label = "2024", size = 3.2, colour = "#888780", hjust = 0.5) +
+  annotate("text", x = as_date("2025-07-01"), y = 18.35,
+           label = "2025", size = 3.2, colour = "#888780", hjust = 0.5) +
+  scale_colour_manual(values = palette_region) +
+  scale_fill_manual(values = palette_region) +
+  scale_linetype_manual(values = c("Brazil (BRA)" = "dashed", "Europe (EUR)" = "solid")) +
+  scale_x_date(
+    date_breaks = "3 months",
+    date_labels = "%b '%y",
+    expand = expansion(add = 10)
+  ) +
+  scale_y_continuous(
+    labels = \(x) paste0(x, " min"),
+    limits = c(10, 19),
+    breaks = seq(10, 18, 2),
+    expand = expansion(mult = c(0.02, 0.02))
+  ) +
+  guides(
+    fill = "none",
+    linetype = "none",
+    colour = guide_legend(title = NULL)
+  ) +
+  labs(x = "month", y = "Taxi-out time (min)")
+
+p_base
+```
+
+## Move Toward Final Styling
+
+The final styling keeps the timeline quiet, with soft gridlines and an in-panel legend.
+
+```{r}
+#| label: styled-main-plot
+#| fig-width: 10
+#| fig-height: 5
+
+theme_txxt <- function() {
+  theme_minimal(base_size = 11) +
+    theme(
+      panel.grid.minor = element_line(colour = "#E6E3DA", linewidth = 0.35),
+      panel.grid.major = element_line(colour = "#D9D5CB", linewidth = 0.45),
+      axis.title.x = element_text(size = 11),
+      axis.title.y = element_text(size = 11),
+      axis.text = element_text(colour = "#4A4945"),
+      legend.text = element_text(size = 10),
+      plot.margin = margin(0, 6, 0, 6)
+    )
+}
+
+p_main <- p_base +
+  theme_txxt() +
+  theme(
+    legend.position = c(0.88, 0.48),
+    legend.justification = c(1, 0.5),
+    legend.direction = "vertical",
+    legend.background = element_rect(fill = scales::alpha("white", 0.75), colour = NA),
+    legend.key = element_rect(fill = NA, colour = NA),
+    legend.margin = margin(2, 2, 2, 2)
+  )
+
+p_main
+```
+
+## Key Message Panels
+
+The small panels turn the result into a submission-ready read: Europe edges upward, Brazil
+is broadly steady, and the variability signal is not a single clean directional change.
+
+```{r}
+#| label: key-message-panels
+#| fig-width: 10
+#| fig-height: 2
+
+key_tile <- function(value, label, sublabel, accent_col) {
+  ggplot() +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1,
+             fill = "#F1EFE8", colour = NA) +
+    annotate("text", x = 0.07, y = 0.72,
+             label = value, size = 6.2, fontface = "bold",
+             colour = accent_col, hjust = 0, vjust = 0.5) +
+    annotate("text", x = 0.07, y = 0.42,
+             label = label, size = 4.2,
+             colour = "#444441", hjust = 0, vjust = 0.5) +
+    annotate("text", x = 0.07, y = 0.20,
+             label = sublabel, size = 3.6,
+             colour = "#888780", hjust = 0, vjust = 0.5) +
+    coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+    theme_void() +
+    theme(
+      plot.margin = margin(0, 0, 0, 0),
+      plot.background = element_rect(fill = NA, colour = NA)
+    )
+}
+
+tile_eur <- key_tile(eur_delta, "EUR taxi-out change", "2023 avg → 2025 avg", col_eur)
+tile_bra <- key_tile(bra_delta, "BRA taxi-out change", "2023 avg → 2025 avg", col_bra)
+tile_iqr <- key_tile(iqr_label, "IQR direction", "predictability roughly flat", "#5F5E5A")
+
+p_tiles <- tile_eur + tile_bra + tile_iqr +
+  plot_layout(ncol = 3) &
+  theme(plot.margin = margin(0, 8, 0, 8))
+
+p_tiles
+```
+
+## Final Assembly
+
+```{r}
+#| label: final-assembly
+#| fig-width: 10
+#| fig-height: 7
+
+width <- 10
+height <- 7
+dpi <- 300
+outname <- "figures/day20-global-change.png"
+
+our_title <- paste0(
+  "<span style='font-size:12pt;'><b>Chart-Challenge Day 20 - Global Change (Timeline)</b></span><br>",
+  "<span style='font-size:18pt;'><b>Taxi-out time: a quiet drift upward in Europe</b></span>"
+)
+
+our_subtitle <- paste0(
+  "A small but persistent divergence emerges: ",
+  "<b>Europe drifts upward, Brazil remains broadly steady</b>. ",
+  "The chart shows the median monthly taxi-out times across 12 airports per region. ",
+  "The shaded bands show the interquartile range (IQR) of daily airport medians. ",
+  "We observe a gentle drift upward in Europe, suggesting steadily increasing constraints ",
+  "and pressure on the departure flow."
+)
+
+our_caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Data: Brazil-Europe Comparison Report, available at: ",
+  "<span style='color:#4A4945;'>github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge</span>"
+)
+
+p_final <- p_tiles / p_main +
+  plot_layout(heights = c(1.15, 5)) +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 16,
+        lineheight = 1.2,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 11,
+        colour = "#2F2F2F",
+        lineheight = 1.15,
+        margin = margin(b = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.caption = element_textbox_simple(
+        size = 9,
+        colour = "#4F4E49",
+        halign = 0,
+        lineheight = 1.1,
+        margin = margin(t = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.margin = margin(12, 12, 12, 12)
+    )
+  ) &
+  theme(plot.background = element_rect(fill = "white", colour = NA))
+
+p_final
+```
+
+## Save And Check
+
+```{r}
+#| label: save-final
+
+ggsave(
+  filename = outname,
+  plot = p_final,
+  width = width,
+  height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: check-final
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname)
+```
