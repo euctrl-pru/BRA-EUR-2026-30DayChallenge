@@ -141,3 +141,17 @@ Conceptual building blocks
 * `{ggtext}` and `{ggview}` for the final title, subtitle, caption, and output sizing
 
 ![Day-19 evolution](figures/day19-evolution.png)
+
+### Day 20 - "global change"
+
+For Day 20 we interpreted global change as a quiet operational drift in taxi-out time. The chart compares monthly departure taxi-out times across the Brazil and Europe study airports from 2023 to 2025. Each regional line shows the median airport-month, while the shaded band summarizes the interquartile range of daily airport medians. The result is a small but persistent divergence: Europe drifts upward, while Brazil remains broadly steady.
+
+Conceptual building blocks
+
+* daily taxi-out aggregates for 12 study airports per region, archived for 2023, 2024, and 2025
+* airport-month summaries built from daily departure taxi-out time
+* regional medians across airports, with IQR bands to show within-month predictability
+* key-message panels showing the 2023-to-2025 change for each region
+* `{patchwork}`, `{ggtext}`, and `ggsave()` for the final publication layout and export
+
+![Day-20 global change](figures/day20-global-change.png)

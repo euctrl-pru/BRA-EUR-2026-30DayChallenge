@@ -1,0 +1,30 @@
+---
+title: "Day 20 - Social Post Drafts"
+format: html
+---
+
+## LinkedIn
+
+Day 20 of the #30DayChartChallenge: Global change.
+
+For today's prompt we looked for a small operational signal rather than a dramatic system break: departure taxi-out time across the Brazil and Europe study airports.
+
+The chart compares monthly median taxi-out time from 2023 to 2025, using daily airport-level taxi-out aggregates for 12 airports per region. The line shows the median airport-month; the shaded band shows the interquartile range of daily airport medians.
+
+The takeaway is a quiet divergence. Europe drifts upward by about one minute, suggesting gradually increasing pressure on the departure flow, while Brazil remains broadly steady over the same period.
+
+Joint work by DECEA Performance Section and EUROCONTROL PRU.
+
+#30DayChartChallenge #Day20 #DataVisualization #Aviation #AirTrafficManagement #RStats #ggplot2
+
+## Bluesky
+
+Day 20 #30DayChartChallenge: Global change.
+
+Taxi-out time tells a quiet operational story: Europe drifts upward from 2023 to 2025, while Brazil remains broadly steady.
+
+Monthly median departure taxi-out time across 12 study airports per region; shaded bands show the IQR of daily airport medians.
+
+Joint work by DECEA Performance Section and EUROCONTROL PRU.
+
+#30DayChartChallenge #Day20 #DataViz #Aviation #RStats
