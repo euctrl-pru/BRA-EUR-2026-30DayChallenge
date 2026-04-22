@@ -155,3 +155,17 @@ Conceptual building blocks
 * `{patchwork}`, `{ggtext}`, and `ggsave()` for the final publication layout and export
 
 ![Day-20 global change](figures/day20-global-change.png)
+
+### Day 22 - "new tool"
+
+For Day 22 we used animation as the new tool. The chart compares the seasonal delay pulse of Brazilian and European study airports from 2023 to 2025. Delay is estimated from the airport punctuality bins by assigning each bin its midpoint and calculating average positive delay per flight. The final GIF highlights selected airports while the black line shows the weighted regional average.
+
+Conceptual building blocks
+
+* binned airport punctuality data for Brazil and Europe, 2023-2025
+* midpoint-based average positive delay per flight
+* 7-day rolling delay smoothed into weekly seasonal profiles
+* selected airport highlights for `SBGR`, `SBGL`, `SBBR`, `EGLL`, `EDDF`, and `LPPT`
+* `{magick}` to stitch yearly frames into a lightweight animated GIF
+
+![Day-22 new tool](figures/day22-new-tool-delay-pulse.gif)

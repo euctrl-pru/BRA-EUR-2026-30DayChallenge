@@ -1,0 +1,298 @@
+---
+title: "Day 22 - New Tool"
+format: html
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(magick)
+library(zoo)
+library(scales)
+```
+
+## Data Preparation
+
+```{r}
+#| label: data-preparation
+
+bin_midpoints <- tribble(
+  ~BIN, ~DLY_MIN,
+  "(-INF,-60]", -70,
+  "(-60,-55]", -57.5,
+  "(-55,-50]", -52.5,
+  "(-50,-45]", -47.5,
+  "(-45,-40]", -42.5,
+  "(-40,-35]", -37.5,
+  "(-35,-30]", -32.5,
+  "(-30,-25]", -27.5,
+  "(-25,-20]", -22.5,
+  "(-20,-15]", -17.5,
+  "(-15,-10]", -12.5,
+  "(-10,-5]", -7.5,
+  "(-5,0]", -2.5,
+  "(0,5)", 2.5,
+  "[5,10)", 7.5,
+  "[10,15)", 12.5,
+  "[15,20)", 17.5,
+  "[20,25)", 22.5,
+  "[25,30)", 27.5,
+  "[30,35)", 32.5,
+  "[35,40)", 37.5,
+  "[40,45)", 42.5,
+  "[45,50)", 47.5,
+  "[50,55)", 52.5,
+  "[55,60)", 57.5,
+  "[60,INF)", 70
+)
+
+read_punctuality <- function(path, year, region) {
+  punc <- readr::read_csv(path, show_col_types = FALSE)
+
+  if ("APT" %in% names(punc)) {
+    punc <- punc |>
+      rename(ICAO = APT)
+  }
+
+  punc |>
+    mutate(
+      DATE = lubridate::ymd(as.character(DATE)),
+      YEAR = year,
+      REGION = region
+    ) |>
+    filter(
+      DATE >= lubridate::ymd(paste0(year, "-01-01")),
+      DATE <= lubridate::ymd(paste0(year, "-12-31"))
+    )
+}
+
+bra_apts <- c("SBBR", "SBGR", "SBSP", "SBKP", "SBRJ", "SBGL", "SBCF", "SBSV", "SBPA", "SBCT", "SBRF", "SBEG")
+eur_apts <- c("EGLL", "EGKK", "EHAM", "EDDF", "EDDM", "LSZH", "LFPG", "LEMD", "LEBL", "LPPT", "LTFM", "LGAV")
+study_apts <- c(bra_apts, eur_apts)
+
+punctuality_raw <- bind_rows(
+  read_punctuality("./data/BRA-punc-2023.csv", 2023, "Brazil"),
+  read_punctuality("./data/BRA-punc-2024.csv", 2024, "Brazil"),
+  read_punctuality("./data/BRA-punc-2025.csv", 2025, "Brazil"),
+  read_punctuality("./data/EUR-punc-2023.csv", 2023, "Europe"),
+  read_punctuality("./data/EUR-punc-2024.csv", 2024, "Europe"),
+  read_punctuality("./data/PBWG-EUR-punc-2025.csv", 2025, "Europe")
+) |>
+  filter(ICAO %in% study_apts)
+
+delay_daily <- punctuality_raw |>
+  pivot_longer(
+    cols = matches("^\\(|^\\["),
+    names_to = "BIN",
+    values_to = "N_FLTS"
+  ) |>
+  left_join(bin_midpoints, by = "BIN") |>
+  mutate(
+    POS_DLY_MIN = pmax(DLY_MIN, 0) * N_FLTS,
+    DLY_15_FLTS = if_else(DLY_MIN >= 15, N_FLTS, 0)
+  ) |>
+  group_by(REGION, ICAO, DATE, YEAR, PHASE) |>
+  summarise(
+    N_PHASE = sum(N_FLTS, na.rm = TRUE),
+    POS_DLY_PER_FLT = sum(POS_DLY_MIN, na.rm = TRUE) / N_PHASE,
+    SHARE_DLY_15 = sum(DLY_15_FLTS, na.rm = TRUE) / N_PHASE,
+    .groups = "drop"
+  ) |>
+  group_by(REGION, ICAO, DATE, YEAR) |>
+  summarise(
+    N_FLTS = sum(N_PHASE, na.rm = TRUE),
+    AVG_DLY = sum(POS_DLY_PER_FLT * N_PHASE, na.rm = TRUE) / N_FLTS,
+    SHARE_DLY_15 = sum(SHARE_DLY_15 * N_PHASE, na.rm = TRUE) / N_FLTS,
+    .groups = "drop"
+  ) |>
+  arrange(REGION, ICAO, DATE) |>
+  group_by(REGION, ICAO) |>
+  mutate(
+    AVG_DLY_7D = rollmean(AVG_DLY, k = 7, fill = NA, align = "right"),
+    SHARE_DLY_15_7D = rollmean(SHARE_DLY_15, k = 7, fill = NA, align = "right")
+  ) |>
+  ungroup() |>
+  filter(!is.na(AVG_DLY_7D))
+
+airport_order <- delay_daily |>
+  summarise(MED_DLY = median(AVG_DLY_7D, na.rm = TRUE), .by = c(REGION, ICAO)) |>
+  arrange(REGION, MED_DLY) |>
+  pull(ICAO)
+
+delay_daily <- delay_daily |>
+  mutate(
+    REGION = factor(REGION, levels = c("Brazil", "Europe")),
+    ICAO = factor(ICAO, levels = unique(airport_order))
+  )
+
+delay_anim_weekly <- delay_daily |>
+  mutate(WEEK = lubridate::floor_date(DATE, unit = "week", week_start = 1)) |>
+  summarise(
+    DATE = max(DATE, na.rm = TRUE),
+    DOY = round(mean(lubridate::yday(DATE), na.rm = TRUE)),
+    AVG_DLY_7D = weighted.mean(AVG_DLY_7D, N_FLTS, na.rm = TRUE),
+    SHARE_DLY_15_7D = weighted.mean(SHARE_DLY_15_7D, N_FLTS, na.rm = TRUE),
+    N_FLTS = sum(N_FLTS, na.rm = TRUE),
+    .by = c(REGION, ICAO, YEAR, WEEK)
+  )
+
+network_daily <- delay_anim_weekly |>
+  summarise(
+    DOY = round(mean(DOY, na.rm = TRUE)),
+    AVG_DLY_7D = weighted.mean(AVG_DLY_7D, N_FLTS, na.rm = TRUE),
+    SHARE_DLY_15_7D = weighted.mean(SHARE_DLY_15_7D, N_FLTS, na.rm = TRUE),
+    N_FLTS = sum(N_FLTS, na.rm = TRUE),
+    .by = c(REGION, DATE, YEAR, WEEK)
+  )
+
+highlight_airports <- tribble(
+  ~ICAO, ~AIRPORT,
+  "SBGR", "Sao Paulo GRU",
+  "SBGL", "Rio Galeao",
+  "SBBR", "Brasilia",
+  "EGLL", "Heathrow",
+  "EDDF", "Frankfurt",
+  "LPPT", "Lisbon"
+)
+
+highlight_daily <- delay_anim_weekly |>
+  inner_join(highlight_airports, by = join_by(ICAO)) |>
+  mutate(HIGHLIGHT = paste0(AIRPORT, " (", ICAO, ")"))
+
+highlight_labels <- highlight_daily |>
+  group_by(REGION, ICAO, YEAR) |>
+  slice_max(DOY, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(LABEL_DOY = DOY + 12)
+```
+
+## Animation
+
+```{r}
+#| label: build-animation
+
+yield_delay <- 15
+
+highlight_colors <- c(
+  "Sao Paulo GRU (SBGR)" = "#007f5f",
+  "Rio Galeao (SBGL)" = "#2b9348",
+  "Brasilia (SBBR)" = "#80b918",
+  "Heathrow (EGLL)" = "#3a86ff",
+  "Frankfurt (EDDF)" = "#8338ec",
+  "Lisbon (LPPT)" = "#ff9f1c"
+)
+
+plot_delay_profile <- function(frame_year) {
+  ggplot(
+    filter(delay_anim_weekly, YEAR == frame_year),
+    aes(x = DOY, y = AVG_DLY_7D)
+  ) +
+    geom_hline(yintercept = yield_delay, linewidth = 0.45, linetype = "22", color = "#9d2f2f") +
+    geom_line(aes(group = ICAO), linewidth = 0.35, alpha = 0.18, color = "#8f9699") +
+    geom_line(
+      data = filter(highlight_daily, YEAR == frame_year),
+      aes(group = ICAO, color = HIGHLIGHT),
+      linewidth = 0.9,
+      alpha = 0.95
+    ) +
+    geom_line(
+      data = filter(network_daily, YEAR == frame_year),
+      aes(group = REGION),
+      linewidth = 1.4,
+      color = "#202020"
+    ) +
+    geom_point(
+      data = filter(network_daily, YEAR == frame_year),
+      aes(size = N_FLTS),
+      color = "#202020",
+      alpha = 0.85
+    ) +
+    geom_text(
+      data = filter(highlight_labels, YEAR == frame_year),
+      aes(x = LABEL_DOY, label = ICAO, color = HIGHLIGHT),
+      hjust = 0,
+      size = 3,
+      fontface = "bold",
+      show.legend = FALSE
+    ) +
+    annotate(
+      "text",
+      x = 8,
+      y = yield_delay + 1.2,
+      label = "15 min threshold",
+      hjust = 0,
+      vjust = 0,
+      size = 3.2,
+      color = "#9d2f2f"
+    ) +
+    scale_color_manual(
+      values = highlight_colors,
+      guide = guide_legend(title = NULL, override.aes = list(linewidth = 1.4, alpha = 1))
+    ) +
+    scale_size_area(max_size = 3.6, guide = "none") +
+    scale_x_continuous(
+      breaks = c(1, 91, 182, 274, 365),
+      labels = c("Jan", "Apr", "Jul", "Oct", "Dec"),
+      limits = c(1, 385),
+      expand = expansion(mult = c(0, 0))
+    ) +
+    scale_y_continuous(
+      labels = label_number(suffix = " min"),
+      limits = c(0, 50),
+      expand = expansion(mult = c(0, 0.04))
+    ) +
+    facet_wrap(~ REGION, ncol = 1) +
+    labs(
+      title = "Chart-Challenge Day 22 - New Tool",
+      subtitle = paste0("Brazilian and European airport delay pulse, ", frame_year, ": color highlights selected airports; black is the weighted regional average"),
+      x = NULL,
+      y = "Average positive delay",
+      caption = "DECEA Performance Section and PRU EUROCONTROL; data Brazil-Europe comparison study - airport punctuality data, 2023-2025. Delay estimated from punctuality-bin midpoints."
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      legend.position = "top",
+      panel.grid.minor = element_blank(),
+      strip.text = element_text(face = "bold"),
+      plot.title = element_text(face = "bold", size = 18),
+      plot.subtitle = element_text(size = 11),
+      plot.caption = element_text(color = "grey35")
+    )
+}
+```
+
+```{r}
+#| label: render-animation
+
+dir.create("figures", showWarnings = FALSE)
+frame_dir <- file.path(tempdir(), "day22-frames")
+dir.create(frame_dir, showWarnings = FALSE)
+
+frame_years <- sort(unique(delay_anim_weekly$YEAR))
+frame_paths <- file.path(frame_dir, paste0("delay-pulse-", frame_years, ".png"))
+
+purrr::walk2(
+  frame_years,
+  frame_paths,
+  \(frame_year, frame_path) {
+    ggsave(
+      filename = frame_path,
+      plot = plot_delay_profile(frame_year),
+      width = 9,
+      height = 6,
+      dpi = 150
+    )
+  }
+)
+
+delay_animation <- image_read(frame_paths) |>
+  image_join() |>
+  image_animate(fps = 1)
+
+image_write(delay_animation, "figures/day22-new-tool-delay-pulse.gif")
+
+knitr::include_graphics("figures/day22-new-tool-delay-pulse.gif")
+```
