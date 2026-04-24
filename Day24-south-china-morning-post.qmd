@@ -1,0 +1,410 @@
+---
+title: "Day 24 - South China Morning Post"
+format: html
+---
+
+## Aim
+
+Today's prompt points to the South China Morning Post rather than to an obvious machine-readable
+dataset. For this day we therefore build a small public-facts dataset from COMAC product pages,
+COMAC news releases, and one recent SCMP article on the C919 delivery slowdown.
+
+The chart focuses on the two China-made passenger jets that are easiest to compare from those
+public sources:
+
+* `C909`, the regional jet formerly marketed as `ARJ21`
+* `C919`, the larger narrowbody intended to challenge Airbus and Boeing in the trunk-route market
+
+The final layout combines three ideas:
+
+* the aircraft design envelope, using seating and range
+* the current scale gap, using cumulative deliveries and passengers carried
+* the current SCMP signal, namely the slow C919 delivery pace in the first quarter of 2026
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(ggtext)
+library(patchwork)
+library(scales)
+```
+
+## Read Challenge Inputs
+
+```{r}
+#| label: read-challenge-inputs
+
+facts_raw <- readr::read_csv(
+  "data/comac-c909-c919-public-facts-2024-2026.csv",
+  show_col_types = FALSE
+)
+
+facts <- facts_raw |>
+  mutate(
+    observation_date = as.Date(observation_date),
+    source_date = as.Date(source_date),
+    value_num = readr::parse_number(as.character(value)),
+    value_min_num = readr::parse_number(as.character(value_min)),
+    value_max_num = readr::parse_number(as.character(value_max))
+  )
+```
+
+## Build Plot Inputs
+
+```{r}
+#| label: build-plot-inputs
+
+aircraft_palette <- c(
+  C909 = "#138A74",
+  C919 = "#C24A3A"
+)
+
+aircraft_fill <- c(
+  C909 = alpha("#138A74", 0.18),
+  C919 = alpha("#C24A3A", 0.18)
+)
+
+spec_data <- facts |>
+  filter(fact_category == "specification") |>
+  select(aircraft, fact_name, value_min_num, value_max_num) |>
+  pivot_wider(
+    names_from = fact_name,
+    values_from = c(value_min_num, value_max_num),
+    names_sep = "_"
+  ) |>
+  transmute(
+    aircraft,
+    seats_min = value_min_num_seating_capacity,
+    seats_max = value_max_num_seating_capacity,
+    range_min = value_min_num_range,
+    range_max = value_max_num_range,
+    aircraft_lab = recode(
+      aircraft,
+      C909 = "C909\nregional jet",
+      C919 = "C919\nnarrowbody"
+    )
+  )
+
+latest_ops <- facts |>
+  filter(fact_name %in% c("cumulative_deliveries", "cumulative_passengers")) |>
+  arrange(aircraft, fact_name, observation_date) |>
+  group_by(aircraft, fact_name) |>
+  slice_tail(n = 1) |>
+  ungroup() |>
+  mutate(
+    value = value_num,
+    metric = recode(
+      fact_name,
+      cumulative_deliveries = "Delivered aircraft",
+      cumulative_passengers = "Passengers carried"
+    ),
+    metric = factor(metric, levels = c("Delivered aircraft", "Passengers carried"))
+  )
+
+c919_signal <- facts |>
+  filter(aircraft == "C919", fact_name %in% c("q1_deliveries_2026", "cumulative_deliveries")) |>
+  arrange(observation_date) |>
+  group_by(fact_name) |>
+  slice_tail(n = 1) |>
+  ungroup() |>
+  mutate(
+    value = value_num,
+    label = case_when(
+      fact_name == "q1_deliveries_2026" ~ paste0(comma(value), " deliveries in Q1 2026"),
+      fact_name == "cumulative_deliveries" ~ paste0(comma(value), " total delivered by Apr 20, 2026")
+    )
+  )
+
+caption_note <- paste0(
+  "Data assembled manually on April 24, 2026 from public COMAC product/news pages and SCMP reporting. ",
+  "One row per published fact; source URLs are included in ",
+  "data/comac-c909-c919-public-facts-2024-2026.csv."
+)
+```
+
+## Design Envelope
+
+```{r}
+#| label: design-envelope
+#| fig-width: 8
+#| fig-height: 5
+
+p_specs <- ggplot(spec_data) +
+  geom_rect(
+    aes(
+      xmin = range_min,
+      xmax = range_max,
+      ymin = seats_min,
+      ymax = seats_max,
+      fill = aircraft,
+      colour = aircraft
+    ),
+    linewidth = 0.9
+  ) +
+  geom_text(
+    aes(
+      x = (range_min + range_max) / 2,
+      y = (seats_min + seats_max) / 2,
+      label = aircraft_lab,
+      colour = aircraft
+    ),
+    lineheight = 0.95,
+    fontface = "bold",
+    size = 4
+  ) +
+  scale_fill_manual(values = aircraft_fill, guide = "none") +
+  scale_colour_manual(values = aircraft_palette, guide = "none") +
+  scale_x_continuous(
+    labels = label_number(big.mark = ","),
+    breaks = seq(2000, 6000, 1000),
+    limits = c(2000, 5800),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  scale_y_continuous(
+    breaks = seq(50, 200, 25),
+    limits = c(70, 200),
+    expand = expansion(mult = c(0.02, 0.04))
+  ) +
+  labs(
+    title = "Two different jobs",
+    x = "Range (km)",
+    y = "Typical seating"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "#DDD7C9", linewidth = 0.4),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14, colour = "#1C1B18"),
+    plot.margin = margin(6, 8, 6, 6)
+  )
+
+p_specs
+```
+
+## Current Scale Gap
+
+```{r}
+#| label: current-scale-gap
+#| fig-width: 7
+#| fig-height: 5
+
+ops_labels <- latest_ops |>
+  mutate(
+    label = case_when(
+      metric == "Delivered aircraft" ~ comma(value),
+      TRUE ~ label_number(accuracy = 0.1, scale_cut = cut_short_scale())(value)
+    ),
+    label_x = case_when(
+      metric == "Delivered aircraft" ~ value + 3,
+      TRUE ~ value + 3e5
+    )
+  )
+
+p_ops <- ggplot(latest_ops, aes(x = value, y = fct_rev(aircraft), colour = aircraft)) +
+  geom_segment(
+    aes(x = 0, xend = value, yend = fct_rev(aircraft)),
+    linewidth = 1.2,
+    alpha = 0.55,
+    show.legend = FALSE
+  ) +
+  geom_point(size = 4.5, show.legend = FALSE) +
+  geom_text(
+    data = ops_labels,
+    aes(x = label_x, label = label),
+    hjust = 0,
+    size = 3.5,
+    fontface = "bold",
+    show.legend = FALSE
+  ) +
+  scale_colour_manual(values = aircraft_palette, guide = "none") +
+  scale_x_continuous(
+    labels = label_number(scale_cut = cut_short_scale()),
+    expand = expansion(mult = c(0, 0.18))
+  ) +
+  facet_wrap(~ metric, scales = "free_x", ncol = 1) +
+  labs(
+    title = "The scale gap is still large",
+    x = NULL,
+    y = NULL
+  ) +
+  coord_cartesian(clip = "off") +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "#E2DDD1", linewidth = 0.4),
+    strip.text = element_text(face = "bold", size = 10),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14, colour = "#1C1B18"),
+    plot.margin = margin(6, 24, 6, 8)
+  )
+
+p_ops
+```
+
+## SCMP Signal
+
+```{r}
+#| label: scmp-signal
+#| fig-width: 7
+#| fig-height: 1.8
+
+signal_top <- c919_signal |>
+  filter(fact_name == "q1_deliveries_2026") |>
+  pull(label)
+
+signal_bottom <- c919_signal |>
+  filter(fact_name == "cumulative_deliveries") |>
+  pull(label)
+
+p_signal <- ggplot() +
+  annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = "#F2ECE1", colour = NA) +
+  annotate("text", x = 0.05, y = 0.72,
+           label = "SCMP current signal",
+           hjust = 0, vjust = 0.5,
+           size = 4.2, fontface = "bold", colour = "#1C1B18") +
+  annotate("text", x = 0.05, y = 0.43,
+           label = signal_top,
+           hjust = 0, vjust = 0.5,
+           size = 4.7, fontface = "bold", colour = aircraft_palette[["C919"]]) +
+  annotate("text", x = 0.05, y = 0.18,
+           label = signal_bottom,
+           hjust = 0, vjust = 0.5,
+           size = 3.7, colour = "#4A4740") +
+  coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+  theme_void() +
+  theme(
+    plot.margin = margin(0, 8, 0, 8),
+    plot.background = element_rect(fill = NA, colour = NA)
+  )
+
+p_signal
+```
+
+## Principal First Shot
+
+```{r}
+#| label: first-shot-assembly
+#| fig-width: 11
+#| fig-height: 7
+
+width <- 11
+height <- 7
+dpi <- 300
+outname <- "figures/day24-south-china-morning-post.png"
+
+p_right <- p_signal / p_ops +
+  plot_layout(heights = c(1.1, 4))
+
+p_first_shot <- p_specs | p_right +
+  plot_layout(widths = c(1.08, 0.92)) +
+  theme(
+    plot.background = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA)
+  )
+
+p_first_shot
+```
+
+## Beautification
+
+The first shot already establishes the payload. The final step below only upgrades the
+submission framing: a clearer challenge title, a compact explanatory subtitle, and the
+usual caption note including public-source assembly and the GitHub file location.
+
+```{r}
+#| label: beautify-final
+#| fig-width: 11
+#| fig-height: 7
+
+our_title <- paste0(
+  "<span style='font-size:12pt;'><b>Chart-Challenge Day 24 - South China Morning Post</b></span><br>",
+  "<span style='font-size:18pt;'><b>COMAC's C909 and C919 reveal two different stages of industrial maturity</b></span>"
+)
+
+our_subtitle <- paste0(
+  "Using a small public-facts dataset assembled from public COMAC pages and recent SCMP reporting, ",
+  "the chart compares the two aircraft across their <b>design envelope</b> and their current public ",
+  "<b>operational scale</b>. The aircraft do not target the same market segment, yet the available counts ",
+  "still reveal a clear gap: the <b>C909</b> has accumulated much broader operating exposure, ",
+  "while the <b>C919</b> remains in an earlier and slower production ramp-up."
+)
+
+our_caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Prompt source: South China Morning Post. Public facts assembled manually from COMAC product pages, COMAC news releases, and SCMP reporting dated April 20, 2026.",
+  "<br>Data file available in this repository: ",
+  "<span style='color:#4A4945;'>data/comac-c909-c919-public-facts-2024-2026.csv</span> on github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge.",
+  "<br>", caption_note
+)
+
+p_final <- p_first_shot +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 16,
+        lineheight = 1.22,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 11,
+        colour = "#2E2C28",
+        lineheight = 1.12,
+        margin = margin(b = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.caption = element_textbox_simple(
+        size = 8.8,
+        colour = "#4F4B45",
+        halign = 0,
+        lineheight = 1.08,
+        margin = margin(t = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.margin = margin(12, 12, 12, 12)
+    )
+  )
+
+p_final
+```
+
+## Save And Check
+
+```{r}
+#| label: save-final
+
+ggsave(
+  filename = outname,
+  plot = p_final,
+  width = width,
+  height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: check-final
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname)
+```

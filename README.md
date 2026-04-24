@@ -169,3 +169,16 @@ Conceptual building blocks
 * `{magick}` to stitch yearly frames into a lightweight animated GIF
 
 ![Day-22 new tool](figures/day22-new-tool-delay-pulse.gif)
+
+### Day 24 - "South China Morning Post"
+
+For Day 24 we treated the prompt as a source challenge rather than as a ready-made downloadable dataset. We assembled a small reference CSV from public COMAC product pages, COMAC news releases, and one recent South China Morning Post article on the C919 delivery slowdown. The final chart compares the `C909` and `C919` across their seat-range design envelope, their current public operational scale, and the latest SCMP signal that only three C919 aircraft were delivered in the first quarter of 2026.
+
+Conceptual building blocks
+
+* a manually assembled public-facts CSV with one published fact per row and source URLs included
+* aircraft design envelopes shown as seat-range rectangles to distinguish the regional-jet and narrowbody segments
+* small-multiple operational comparisons for cumulative deliveries and passengers carried
+* a compact SCMP callout panel to anchor the chart in the Day 24 prompt
+
+![Day-24 South China Morning Post](figures/day24-south-china-morning-post.png)
