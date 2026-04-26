@@ -1,0 +1,553 @@
+---
+title: "Day 25 - Space"
+format: html
+---
+
+## Aim
+
+Today's prompt is interpreted as a ground-capacity question.
+
+In this airport framing:
+
+* `space` means the physical movement area occupied during taxi-out
+* `uncertainty` means the extra occupation time beyond the reference taxi-out expectation
+
+The first sketch suggested a density cloud of taxi-out time versus traffic volume. That is a
+useful starting point, but the message becomes clearer if the `y` axis isolates the unexpected
+part of occupation:
+
+`uncertainty = actual taxi-out minutes - reference taxi-out minutes`
+
+That produces a more self-speaking question:
+
+**When daily departure demand rises, how much longer than planned does each departure occupy
+ground space?**
+
+This analytical draft keeps two candidate views:
+
+1. a raw occupancy field, showing the cloud of airport-days
+2. a binned uncertainty frontier, showing how median and upper-tail uncertainty move with demand
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(lubridate)
+library(patchwork)
+library(scales)
+library(ggtext)
+```
+
+## Read Taxi-Out Data
+
+```{r}
+#| label: read-txxt-data
+
+read_txxt <- function(path, region) {
+  readr::read_csv(path, show_col_types = FALSE) |>
+    transmute(
+      ICAO,
+      PHASE,
+      DATE = as_date(DATE),
+      MVTS_VALID,
+      TOT_TXXT,
+      TOT_REF,
+      TOT_ADD_TIME,
+      region = region
+    )
+}
+
+bra_files <- list.files("data", pattern = "PBWG-BRA-txxt-analytic-2025", full.names = TRUE)
+eur_files <- list.files("data", pattern = "PBWG-EUR-txxt-analytic-2025", full.names = TRUE)
+
+txxt_raw <- bind_rows(
+  map(bra_files, read_txxt, region = "Brazil"),
+  map(eur_files, read_txxt, region = "Europe")
+)
+```
+
+## Build Analytical Inputs
+
+We work with departure flows only. The core quantity is the average unexpected taxi-out time per
+departure on each airport-day.
+
+```{r}
+#| label: build-inputs
+
+txxt_daily <- txxt_raw |>
+  filter(PHASE == "DEP", MVTS_VALID > 0) |>
+  mutate(
+    actual_txxt = TOT_TXXT / MVTS_VALID,
+    ref_txxt = TOT_REF / MVTS_VALID,
+    uncertainty_min = actual_txxt - ref_txxt,
+    extra_space_hours = TOT_ADD_TIME / 60,
+    space_demand = MVTS_VALID
+  ) |>
+  mutate(
+    region = factor(region, levels = c("Brazil", "Europe"))
+  )
+
+movement_breaks <- seq(0, 900, by = 50)
+
+uncertainty_frontier <- txxt_daily |>
+  mutate(
+    demand_band = cut(
+      space_demand,
+      breaks = movement_breaks,
+      include.lowest = TRUE,
+      right = FALSE
+    )
+  ) |>
+  filter(!is.na(demand_band)) |>
+  group_by(region, demand_band) |>
+  summarise(
+    demand_mid = mean(space_demand, na.rm = TRUE),
+    n_days = n(),
+    median_unc = median(uncertainty_min, na.rm = TRUE),
+    p75_unc = quantile(uncertainty_min, 0.75, na.rm = TRUE),
+    p90_unc = quantile(uncertainty_min, 0.90, na.rm = TRUE),
+    median_extra_hours = median(extra_space_hours, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  filter(n_days >= 20)
+
+region_summary <- txxt_daily |>
+  summarise(
+    median_unc = median(uncertainty_min, na.rm = TRUE),
+    p90_unc = quantile(uncertainty_min, 0.90, na.rm = TRUE),
+    .by = region
+  )
+```
+
+## Candidate 1: Raw Occupancy Field
+
+This preserves the original idea of a cloud, but makes the vertical axis the uncertainty gap
+rather than the full taxi-out time.
+
+```{r}
+#| label: candidate-raw-field
+#| fig-width: 10
+#| fig-height: 5.5
+
+pal_region <- c("Brazil" = "#0F6E56", "Europe" = "#185FA5")
+
+p_field <- ggplot(txxt_daily, aes(x = space_demand, y = uncertainty_min)) +
+  geom_bin2d(bins = 28) +
+  geom_hline(yintercept = 0, linewidth = 0.45, linetype = "22", colour = "#9A9488") +
+  facet_wrap(~ region, ncol = 2) +
+  scale_fill_gradient(
+    low = "#E8E2D3",
+    high = "#8D5A2B",
+    labels = label_number()
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, 900, 100),
+    expand = expansion(mult = c(0.01, 0.02))
+  ) +
+  scale_y_continuous(
+    labels = \(x) paste0(round(x, 1), " min"),
+    expand = expansion(mult = c(0.02, 0.05))
+  ) +
+  labs(
+    title = "Candidate 1: where uncertain occupation clusters",
+    subtitle = "Each tile is an airport-day in 2025 departures only; y shows extra taxi-out minutes above the reference expectation",
+    x = "Departure movements per day",
+    y = "Unexpected occupation time per departure",
+    fill = "Airport-days"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "#DDD7C9", linewidth = 0.4),
+    strip.text = element_text(face = "bold"),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14, colour = "#1C1B18"),
+    plot.margin = margin(8, 8, 8, 8)
+  )
+
+p_field
+```
+
+## Candidate 2: Binned Uncertainty Frontier
+
+This version makes the story more explicit. The line tracks the median uncertainty at each demand
+level; the ribbon shows the upper tail where space occupation becomes notably less predictable.
+
+```{r}
+#| label: candidate-frontier
+#| fig-width: 10
+#| fig-height: 5.8
+
+p_frontier <- ggplot(
+  uncertainty_frontier,
+  aes(x = demand_mid, y = median_unc, colour = region, fill = region)
+) +
+  geom_ribbon(
+    aes(ymin = median_unc, ymax = p90_unc),
+    alpha = 0.18,
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  geom_line(linewidth = 1.2, show.legend = FALSE) +
+  geom_point(aes(size = n_days), alpha = 0.95, show.legend = FALSE) +
+  geom_text(
+    data = uncertainty_frontier |>
+      group_by(region) |>
+      slice_max(demand_mid, n = 1, with_ties = FALSE) |>
+      ungroup(),
+    aes(label = region),
+    hjust = -0.15,
+    fontface = "bold",
+    size = 3.7,
+    show.legend = FALSE
+  ) +
+  geom_hline(yintercept = 0, linewidth = 0.45, linetype = "22", colour = "#9A9488") +
+  scale_colour_manual(values = pal_region) +
+  scale_fill_manual(values = pal_region) +
+  scale_size_continuous(range = c(2, 5)) +
+  scale_x_continuous(
+    breaks = seq(0, 900, 100),
+    limits = c(0, 860),
+    expand = expansion(mult = c(0.01, 0.08))
+  ) +
+  scale_y_continuous(
+    labels = \(x) paste0(round(x, 1), " min"),
+    expand = expansion(mult = c(0.03, 0.08))
+  ) +
+  facet_wrap(~ region, ncol = 2) +
+  labs(
+    title = "Candidate 2: more departures usually mean more uncertain use of ground space",
+    subtitle = "Median line plus 90th-percentile ribbon of extra taxi-out minutes above reference, grouped into demand bands",
+    x = "Departure movements per day",
+    y = "Unexpected occupation time per departure"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "#DDD7C9", linewidth = 0.4),
+    strip.text = element_text(face = "bold"),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14, colour = "#1C1B18"),
+    plot.margin = margin(8, 12, 8, 8)
+  )
+
+p_frontier
+```
+
+## Chosen Direction
+
+For the publication pass, candidate 2 is the better chart.
+
+Why it works better:
+
+* it encodes the prompt directly: demand on the `x` axis, uncertainty on the `y` axis
+* it separates the central tendency from the disruption tail
+* it reads as a capacity story rather than as a generic point cloud
+* it still lets us compare Brazil and Europe without overloading the page
+
+The most promising headline is:
+
+**Ground space becomes less predictable as departure demand rises, and Europe's upper tail is
+consistently thicker.**
+
+## Publication Metrics
+
+For the publication version we summarize three signals:
+
+* the typical uncertainty per departure in each region
+* the thicker European disruption tail
+* the system-wide amount of extra occupied space on the busiest demand bands
+
+```{r}
+#| label: publication-metrics
+
+tile_stats <- region_summary |>
+  mutate(
+    median_label = paste0(round(median_unc, 1), " min"),
+    p90_label = paste0(round(p90_unc, 1), " min")
+  )
+
+busiest_band <- uncertainty_frontier |>
+  group_by(region) |>
+  slice_max(demand_mid, n = 1, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(
+    extra_hr_label = paste0(round(median_extra_hours), " hr"),
+    demand_label = paste0(round(demand_mid), " dep/day")
+  )
+
+bra_med_label <- tile_stats |>
+  filter(region == "Brazil") |>
+  pull(median_label)
+
+eur_med_label <- tile_stats |>
+  filter(region == "Europe") |>
+  pull(median_label)
+
+eur_p90_label <- tile_stats |>
+  filter(region == "Europe") |>
+  pull(p90_label)
+
+eur_busy_label <- busiest_band |>
+  filter(region == "Europe") |>
+  pull(extra_hr_label)
+
+eur_busy_demand <- busiest_band |>
+  filter(region == "Europe") |>
+  pull(demand_label)
+```
+
+## Final Plot
+
+```{r}
+#| label: final-plot
+#| fig-width: 10
+#| fig-height: 5.8
+
+p_main <- ggplot(
+  uncertainty_frontier,
+  aes(x = demand_mid, y = median_unc, colour = region, fill = region)
+) +
+  geom_ribbon(
+    aes(ymin = median_unc, ymax = p90_unc),
+    alpha = 0.18,
+    colour = NA,
+    show.legend = FALSE
+  ) +
+  geom_line(linewidth = 1.25, show.legend = FALSE) +
+  geom_point(aes(size = n_days), alpha = 0.98, show.legend = FALSE) +
+  geom_text(
+    data = uncertainty_frontier |>
+      group_by(region) |>
+      slice_max(demand_mid, n = 1, with_ties = FALSE) |>
+      ungroup(),
+    aes(x = demand_mid - 28, label = region),
+    hjust = 0,
+    fontface = "bold",
+    size = 3.9,
+    show.legend = FALSE
+  ) +
+  geom_hline(yintercept = 0, linewidth = 0.45, linetype = "22", colour = "#9A9488") +
+  annotate(
+    "label",
+    x = 530,
+    y = 6.8,
+    label = "shaded band = median to 90th percentile\nof unexpected occupation time",
+    size = 3.2,
+    label.size = 0,
+    fill = alpha("white", 0.88),
+    colour = "#4D4B47"
+  ) +
+  scale_colour_manual(values = pal_region) +
+  scale_fill_manual(values = pal_region) +
+  scale_size_continuous(range = c(2.3, 5.3)) +
+  scale_x_continuous(
+    breaks = seq(0, 900, 100),
+    limits = c(0, 860),
+    expand = expansion(mult = c(0.01, 0.08))
+  ) +
+  scale_y_continuous(
+    labels = \(x) paste0(round(x, 1), " min"),
+    limits = c(0, 8.2),
+    breaks = seq(0, 8, 2),
+    expand = expansion(mult = c(0.01, 0.03))
+  ) +
+  facet_wrap(~ region, ncol = 2) +
+  labs(
+    x = "Departure movements per day",
+    y = "Unexpected occupation time per departure"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "#D9D5CB", linewidth = 0.45),
+    strip.text = element_text(face = "bold", size = 12),
+    axis.text = element_text(colour = "#45433E"),
+    axis.title = element_text(colour = "#262522"),
+    plot.margin = margin(0, 12, 0, 8)
+  )
+
+p_main
+```
+
+## Message Row
+
+```{r}
+#| label: message-row
+#| fig-width: 10
+#| fig-height: 2
+
+key_tile <- function(value, label, sublabel, accent_col) {
+  ggplot() +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1,
+             fill = "#F1EFE8", colour = NA) +
+    annotate("text", x = 0.07, y = 0.72,
+             label = value, size = 6.2, fontface = "bold",
+             colour = accent_col, hjust = 0, vjust = 0.5) +
+    annotate("text", x = 0.07, y = 0.42,
+             label = label, size = 4.0,
+             colour = "#444441", hjust = 0, vjust = 0.5) +
+    annotate("text", x = 0.07, y = 0.20,
+             label = sublabel, size = 3.45,
+             colour = "#888780", hjust = 0, vjust = 0.5) +
+    coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+    theme_void() +
+    theme(
+      plot.margin = margin(0, 0, 0, 0),
+      plot.background = element_rect(fill = NA, colour = NA)
+    )
+}
+
+tile_bra <- key_tile(
+  bra_med_label,
+  "Brazil median uncertainty",
+  "extra taxi-out minutes per departure in 2025",
+  pal_region[["Brazil"]]
+)
+
+tile_eur <- key_tile(
+  eur_med_label,
+  "Europe median uncertainty",
+  "higher baseline unpredictability",
+  pal_region[["Europe"]]
+)
+
+tile_tail <- key_tile(
+  eur_busy_label,
+  "Busiest European demand band",
+  "median extra occupied ground-time",
+  "#7A5C2E"
+)
+
+p_tiles <- tile_bra + tile_eur + tile_tail +
+  plot_layout(ncol = 3) &
+  theme(plot.margin = margin(0, 8, 0, 8))
+
+p_tiles
+```
+
+## Final Assembly
+
+```{r}
+#| label: final-assembly
+#| fig-width: 10
+#| fig-height: 7
+
+width <- 10
+height <- 7
+dpi <- 300
+outname_final <- "figures/day25-space-uncertainty.png"
+
+our_title <- paste0(
+  "<span style='font-size:12pt;'><b>Chart-Challenge Day 25 - Space</b></span><br>",
+  "<span style='font-size:18pt;'><b>Busy departure banks make ground-space occupation less predictable</b></span>"
+)
+
+our_subtitle <- paste0(
+  "Here, <b>space</b> means the runway and apron system occupied during taxi-out, and <b>uncertainty</b> means ",
+  "the extra taxi-out time above the reference expectation. ",
+  "Across the 2025 study airports, unexpected occupation usually rises with departure demand. ",
+  "<b>Europe starts from a higher baseline and carries the thicker upper tail</b>, implying more days when the ground system stays occupied longer than planned."
+)
+
+our_caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Measure shown: daily departure taxi-out uncertainty = actual minus reference taxi-out minutes per departure. ",
+  "Point size reflects the number of airport-days in each demand band."
+)
+
+p_final <- p_tiles / p_main +
+  plot_layout(heights = c(1.15, 5)) +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 16,
+        lineheight = 1.2,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 11,
+        colour = "#2F2F2F",
+        lineheight = 1.15,
+        margin = margin(b = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.caption = element_textbox_simple(
+        size = 9,
+        colour = "#4F4E49",
+        halign = 0,
+        lineheight = 1.1,
+        margin = margin(t = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.margin = margin(12, 12, 12, 12)
+    )
+  ) &
+  theme(plot.background = element_rect(fill = "white", colour = NA))
+
+p_final
+```
+
+## Save Rough Figure
+
+```{r}
+#| label: save-rough-figure
+
+outname <- "figures/day25-space-uncertainty-rough.png"
+
+ggsave(
+  filename = outname,
+  plot = p_frontier,
+  width = 10,
+  height = 5.8,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: show-rough-figure
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname)
+```
+
+## Save And Check Final
+
+```{r}
+#| label: save-final
+
+ggsave(
+  filename = outname_final,
+  plot = p_final,
+  width = width,
+  height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: check-final
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname_final)
+```

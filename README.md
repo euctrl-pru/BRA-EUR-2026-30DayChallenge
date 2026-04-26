@@ -182,3 +182,17 @@ Conceptual building blocks
 * a compact SCMP callout panel to anchor the chart in the Day 24 prompt
 
 ![Day-24 South China Morning Post](figures/day24-south-china-morning-post.png)
+
+### Day 25 - "space"
+
+For Day 25 we interpreted space as the runway and apron system occupied during taxi-out. Rather than plotting taxi-out time directly, the final chart focuses on uncertainty: the extra taxi-out minutes above the reference expectation. Grouping airport-days into demand bands lets the chart compare how unexpected occupation rises as departure volume increases in Brazil and Europe.
+
+Conceptual building blocks
+
+* daily departure taxi-out aggregates for the 2025 Brazil and Europe study airports
+* uncertainty defined as `actual taxi-out - reference taxi-out` per departure
+* demand bands built from airport-day departure movements to show how unpredictability changes with traffic pressure
+* median line plus 90th-percentile ribbon to separate the typical signal from the disruption tail
+* a message row linking per-flight uncertainty to the system-wide extra occupied ground-time on the busiest demand bands
+
+![Day-25 space](figures/day25-space-uncertainty.png)

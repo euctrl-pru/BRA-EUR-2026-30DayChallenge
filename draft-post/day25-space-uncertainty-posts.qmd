@@ -1,0 +1,34 @@
+## Day 25 social post proposal
+
+### Option 1
+
+Day 25 of the #30DayChartChallenge: `Space`
+
+We treated airport space as the physical ground system occupied during taxi-out: runway access, taxiways, and apron movement area.
+
+So instead of charting taxi-out time directly, today’s graphic looks at `uncertainty`:
+
+* actual taxi-out minutes minus reference taxi-out minutes
+* grouped by airport-day departure demand
+* compared across the Brazil and Europe study airports
+
+The chart suggests a clear operational pattern: as departure demand rises, ground-space occupation becomes less predictable. Europe also carries the thicker upper tail, meaning more busy days where the ground system stays occupied longer than planned.
+
+#Day25 #30DayChartChallenge #aviation #dataviz #rstats
+
+### Option 2
+
+For today’s `Space` prompt we used taxi-out as a ground-capacity lens.
+
+`Space` = occupied runway/apron system during departure taxi.  
+`Uncertainty` = extra taxi-out minutes above the reference expectation.
+
+By grouping airport-days into demand bands, the chart shows that unexpected occupation generally rises with departure volume. In the 2025 study sample, Europe starts from a slightly higher baseline and shows the thicker disruption tail.
+
+One useful summary from the final chart:
+
+* Brazil median uncertainty: `2.3 min` per departure
+* Europe median uncertainty: `3.1 min` per departure
+* busiest European demand band: about `52 hr` of median extra occupied ground-time across the day
+
+#Day25 #30DayChartChallenge #aviation #datavisualization
