@@ -76,6 +76,34 @@ txxt_daily <- txxt_raw |>
   ) |>
   mutate(region = factor(region, levels = c("Brazil", "Europe")))
 
+airport_names <- tribble(
+  ~ICAO, ~AIRPORT_NAME,
+  "SBBR", "Brasilia",
+  "SBCF", "Belo Horizonte",
+  "SBCT", "Curitiba",
+  "SBEG", "Manaus",
+  "SBGL", "Rio Galeao",
+  "SBGR", "Sao Paulo GRU",
+  "SBKP", "Campinas",
+  "SBPA", "Porto Alegre",
+  "SBRF", "Recife",
+  "SBRJ", "Rio Santos Dumont",
+  "SBSP", "Sao Paulo Congonhas",
+  "SBSV", "Salvador",
+  "EDDF", "Frankfurt",
+  "EDDM", "Munich",
+  "EGKK", "London Gatwick",
+  "EGLL", "London Heathrow",
+  "EHAM", "Amsterdam",
+  "LEBL", "Barcelona",
+  "LEMD", "Madrid",
+  "LFPG", "Paris CDG",
+  "LGAV", "Athens",
+  "LPPT", "Lisbon",
+  "LSZH", "Zurich",
+  "LTFM", "Istanbul"
+)
+
 monthly_airport <- txxt_daily |>
   summarise(
     uncertainty_min = median(uncertainty_min, na.rm = TRUE),
@@ -111,7 +139,11 @@ airport_trend <- monthly_airport |>
   mutate(
     airport_ord = factor(ICAO, levels = ICAO)
   ) |>
-  ungroup()
+  ungroup() |>
+  left_join(airport_names, by = "ICAO") |>
+  mutate(
+    airport_label = paste0(AIRPORT_NAME, "\n", ICAO)
+  )
 
 trend_summary <- airport_trend |>
   summarise(
@@ -222,8 +254,8 @@ p_score <- ggplot(airport_long, aes(x = uncertainty_min, y = airport_ord, group 
   ) +
   labs(
     title = "Candidate 2: almost every European airport trends up, while most Brazilian airports trend down",
-    subtitle = "Average monthly taxi-out uncertainty in 2023 versus 2025",
-    x = "Unexpected taxi-out time per departure",
+    subtitle = "Average monthly additional taxi-out time in 2023 versus 2025",
+    x = "Average additional taxi-out time per departure",
     y = NULL,
     shape = NULL
   ) +
@@ -372,13 +404,27 @@ p_final_main <- ggplot(airport_long_final, aes(x = uncertainty_min, y = airport_
     fill = "white"
   ) +
   geom_text(
-    data = top_changes,
+    data = filter(top_changes, ICAO != "SBRJ"),
     aes(
       x = x_lab,
       y = airport_ord,
+      label = label,
+      hjust = hjust_lab
+    ),
+    size = 3.2,
+    fontface = "bold",
+    colour = "#3D3B37",
+    inherit.aes = FALSE
+  ) +
+  geom_text(
+    data = filter(top_changes, ICAO == "SBRJ"),
+    aes(
+      x = unc_2023 + 0.15,
+      y = airport_ord,
       label = label
     ),
-    hjust = top_changes$hjust_lab,
+    vjust = 1.8,
+    hjust = 0,
     size = 3.2,
     fontface = "bold",
     colour = "#3D3B37",
@@ -388,13 +434,14 @@ p_final_main <- ggplot(airport_long_final, aes(x = uncertainty_min, y = airport_
   scale_colour_manual(values = dir_cols, guide = "none") +
   scale_shape_manual(values = c(21, 24)) +
   scale_x_continuous(
-    labels = \(x) paste0(number(x, accuracy = 0.1), " min"),
+    labels = \(x) paste0(number(x, accuracy = 1), " min"),
     limits = c(1.15, 5.5),
-    breaks = seq(1.5, 5.5, 0.5),
+    breaks = 1:5,
     expand = expansion(mult = c(0.02, 0.08))
   ) +
+  scale_y_discrete(labels = setNames(airport_trend$airport_label, airport_trend$airport_ord)) +
   labs(
-    x = "Unexpected taxi-out time per departure",
+    x = "Average additional taxi-out time per departure",
     y = NULL,
     shape = NULL
   ) +
@@ -484,12 +531,12 @@ outname_final <- "figures/day26-trend.png"
 
 our_title <- paste0(
   "<span style='font-size:12pt;'><b>Chart-Challenge Day 26 - Trend</b></span><br>",
-  "<span style='font-size:18pt;'><b>Taxi-out uncertainty trends in opposite directions across the two study regions</b></span>"
+  "<span style='font-size:18pt;'><b>Additional taxi-out time trends in opposite directions across the two study regions</b></span>"
 )
 
 our_subtitle <- paste0(
-  "Each airport is shown twice: its <b>2023 average</b> and its <b>2025 average</b> unexpected taxi-out time per departure, ",
-  "where unexpected means actual minus reference taxi-out minutes. ",
+  "Each airport is shown twice: its <b>2023 average</b> and its <b>2025 average</b> additional taxi-out time per departure, ",
+  "where additional means actual taxi-out time minus reference taxi-out time. ",
   "<b>Most Brazilian airports moved left</b>, indicating more predictable taxi-out by 2025, while ",
   "<b>almost every European airport moved right</b>, indicating the opposite trend."
 )
@@ -497,7 +544,8 @@ our_subtitle <- paste0(
 our_caption <- paste0(
   "DECEA Performance Section and EUROCONTROL PRU.",
   "<br>Study set: 12 airports in Brazil and 12 airports in Europe. ",
-  "Metric: average monthly departure taxi-out uncertainty."
+  "Metric: average additional taxi-out time. ",
+  "<span style='color:#4A4945;'>github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge</span>"
 )
 
 p_final <- p_tiles / p_final_main +
@@ -510,7 +558,7 @@ p_final <- p_tiles / p_final_main +
       plot.title = ggtext::element_textbox_simple(
         size = 16,
         lineheight = 1.2,
-        margin = margin(b = 10),
+        margin = margin(b = 18),
         padding = margin(0, 0, 0, 0),
         fill = NA,
         box.color = NA
