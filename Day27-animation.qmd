@@ -1,0 +1,428 @@
+---
+title: "Day 27 - animation"
+format: html
+---
+
+## Aim
+
+For Day 27 we use animation to show the **daily rhythm** of the study-airport networks rather than only their aggregate structure.
+
+The chart compares Brazil and Europe side by side on the **same UTC clock**. That turns time-of-day into the main story: even when the same kind of airports are compared, the network does not wake up at the same UTC hour.
+
+To keep the first implementation feasible, we deliberately make three simplifying choices:
+
+1. `July 2025` only
+2. study-airport to study-airport flights only
+3. bidirectional airport-pair corridors, ranked and filtered to the busiest links
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(lubridate)
+library(arrow)
+library(magick)
+library(patchwork)
+library(scales)
+
+source("./R/rqutils-zip.R")
+```
+
+## Build Cached July Inputs
+
+```{r}
+#| label: build-cache
+#| message: false
+#| warning: false
+
+bra_apts <- c("SBBR", "SBGR", "SBSP", "SBKP", "SBRJ", "SBGL", "SBCF", "SBSV", "SBPA", "SBCT", "SBRF", "SBEG")
+eur_apts <- c("EGLL", "EGKK", "EHAM", "EDDF", "EDDM", "LSZH", "LFPG", "LEMD", "LEBL", "LPPT", "LTFM", "LGAV")
+
+cache_file <- "data/day27-animation-cache.rds"
+cache_version <- 2L
+days_in_july <- 31
+keep_top_n <- 12
+
+cache_ok <- FALSE
+
+if (file.exists(cache_file)) {
+  old_cache <- readRDS(cache_file)
+  cache_ok <- is.list(old_cache) &&
+    identical(old_cache$cache_version, cache_version) &&
+    identical(old_cache$keep_top_n, keep_top_n)
+}
+
+if (!cache_ok) {
+  path_nm_flt <- here::here(here::here() |> dirname(), "__DATA", "NM-flight-table")
+
+  eur_july <- read_zip_content(
+    path_nm_flt,
+    "NM-flt-2025.zip",
+    files = "NM-FLT-2025-Q3.parquet",
+    .type = "parquet"
+  ) |>
+    transmute(
+      region = "Europe",
+      adep = ADEP,
+      ades = ADES,
+      dep_time_utc = as.POSIXct(AOBT_3, tz = "UTC")
+    ) |>
+    filter(
+      month(dep_time_utc) == 7,
+      adep %in% eur_apts,
+      ades %in% eur_apts,
+      adep != ades
+    )
+
+  bra_july <- read_parquet("data-src/totalbr.parquet") |>
+    transmute(
+      region = "Brazil",
+      adep = co_addep,
+      ades = co_addes,
+      dep_time_utc = force_tz(dh_inicio, tzone = "UTC"),
+      year,
+      month
+    ) |>
+    filter(
+      year == 2025,
+      month == 7,
+      adep %in% bra_apts,
+      ades %in% bra_apts,
+      adep != ades
+    ) |>
+    select(region, adep, ades, dep_time_utc)
+
+  july_flights <- bind_rows(bra_july, eur_july) |>
+    mutate(
+      hour_utc = hour(dep_time_utc),
+      node_1 = pmin(adep, ades),
+      node_2 = pmax(adep, ades),
+      corridor = paste(node_1, node_2, sep = " <-> ")
+    )
+
+  corridor_totals <- july_flights |>
+    count(region, node_1, node_2, corridor, name = "july_flights") |>
+    group_by(region) |>
+    arrange(desc(july_flights), .by_group = TRUE) |>
+    mutate(corridor_rank = row_number()) |>
+    ungroup()
+
+  corridor_hourly <- july_flights |>
+    count(region, hour_utc, node_1, node_2, corridor, name = "flights_hour") |>
+    left_join(corridor_totals, by = c("region", "node_1", "node_2", "corridor")) |>
+    filter(corridor_rank <= keep_top_n) |>
+    mutate(avg_daily_hour = flights_hour / days_in_july)
+
+  airport_hourly <- july_flights |>
+    select(region, hour_utc, adep, ades) |>
+    pivot_longer(cols = c(adep, ades), values_to = "icao", names_to = "role") |>
+    count(region, hour_utc, icao, name = "movements_hour") |>
+    mutate(avg_daily_hour = movements_hour / days_in_july)
+
+  saveRDS(
+    list(
+      cache_version = cache_version,
+      corridor_hourly = corridor_hourly,
+      airport_hourly = airport_hourly,
+      keep_top_n = keep_top_n,
+      days_in_july = days_in_july
+    ),
+    cache_file
+  )
+}
+
+anim_cache <- readRDS(cache_file)
+corridor_hourly <- anim_cache$corridor_hourly
+airport_hourly <- anim_cache$airport_hourly
+keep_top_n <- anim_cache$keep_top_n
+days_in_july <- anim_cache$days_in_july
+```
+
+## Prepare Plot Tables
+
+```{r}
+#| label: prepare-plot-tables
+
+pal_region <- c("Brazil" = "#0F6E56", "Europe" = "#185FA5")
+
+corridor_totals_top <- corridor_hourly |>
+  distinct(region, corridor, july_flights, corridor_rank) |>
+  arrange(region, corridor_rank) |>
+  mutate(
+    corridor_label = paste0(corridor, "  (", comma(july_flights), " Jul flts)")
+  ) |>
+  group_by(region) |>
+  mutate(
+    corridor_key = paste(region, corridor_label, sep = "___"),
+    corridor_key = factor(corridor_key, levels = rev(corridor_key))
+  ) |>
+  ungroup()
+
+heatmap_base <- corridor_hourly |>
+  left_join(
+    corridor_totals_top |>
+      select(region, corridor, corridor_label, corridor_key),
+    by = c("region", "corridor")
+  ) |>
+  group_by(region, corridor_key, corridor_label) |>
+  complete(
+    hour_utc = 0:23,
+    fill = list(
+      flights_hour = 0,
+      avg_daily_hour = 0
+    )
+  ) |>
+  ungroup() |>
+  mutate(
+    corridor_label = stringr::str_remove(as.character(corridor_key), "^[^_]+___")
+  ) |>
+  mutate(
+    region = factor(region, levels = c("Brazil", "Europe"))
+  )
+
+frame_summary <- heatmap_base |>
+  summarise(
+    avg_daily_flights = sum(avg_daily_hour),
+    active_corridors = sum(avg_daily_hour > 0),
+    .by = c(region, hour_utc)
+  )
+
+hour_profile <- heatmap_base |>
+  summarise(
+    avg_daily_flights = sum(avg_daily_hour),
+    .by = c(region, hour_utc)
+  ) |>
+  group_by(region) |>
+  mutate(
+    hour_share = avg_daily_flights / sum(avg_daily_flights, na.rm = TRUE)
+  ) |>
+  ungroup()
+
+peak_labels <- hour_profile |>
+  group_by(region) |>
+  slice_max(avg_daily_flights, n = 1, with_ties = FALSE) |>
+  ungroup()
+```
+
+## Build Animation
+
+```{r}
+#| label: render-animation
+#| fig-width: 11
+#| fig-height: 7.6
+
+dir.create("figures", showWarnings = FALSE)
+frame_dir <- file.path(tempdir(), "day27-animation-frames")
+dir.create(frame_dir, showWarnings = FALSE)
+
+plot_network_hour <- function(frame_hour) {
+  frame_totals <- frame_summary |>
+    filter(hour_utc == frame_hour) |>
+    mutate(
+      summary_label = paste0(
+        "At ",
+        sprintf("%02d:00", frame_hour),
+        " UTC: ",
+        comma(round(avg_daily_flights, 1)),
+        " avg daily flights across top corridors"
+      )
+    )
+
+  p_heat <- ggplot(
+    heatmap_base,
+    aes(x = hour_utc, y = corridor_key, fill = avg_daily_hour)
+  ) +
+    geom_tile(width = 0.92, height = 0.88, color = "#F7F4EC", linewidth = 0.15) +
+    geom_rect(
+      aes(
+        xmin = frame_hour - 0.5,
+        xmax = frame_hour + 0.5,
+        ymin = -Inf,
+        ymax = Inf
+      ),
+      inherit.aes = FALSE,
+      fill = NA,
+      color = "#A45A00",
+      linewidth = 0.7
+    ) +
+    geom_vline(
+      xintercept = frame_hour,
+      color = "#A45A00",
+      linewidth = 0.55,
+      alpha = 0.95
+    ) +
+    geom_tile(
+      data = heatmap_base |>
+        filter(hour_utc == frame_hour),
+      aes(x = hour_utc, y = corridor_key),
+      fill = NA,
+      color = "#2F241D",
+      linewidth = 0.5
+    ) +
+    geom_text(
+      data = peak_labels,
+      aes(
+        x = hour_utc,
+        y = 1.06,
+        label = paste0("Peak: ", sprintf("%02d:00", hour_utc), " UTC")
+      ),
+      inherit.aes = FALSE,
+      hjust = 0.5,
+      vjust = 0,
+      size = 3.0,
+      color = "#3D3A34"
+    ) +
+    facet_wrap(~ region, ncol = 2, scales = "free_y") +
+    scale_fill_gradient(
+      low = "#F4EBD9",
+      high = "#A33A2B",
+      labels = label_number(accuracy = 0.1),
+      name = "Avg flights\nper July day"
+    ) +
+    scale_y_discrete(labels = \(x) stringr::str_remove(x, "^[^_]+___")) +
+    scale_x_continuous(
+      breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
+      labels = \(x) sprintf("%02d", x),
+      expand = expansion(mult = c(0.01, 0.01))
+    ) +
+    coord_cartesian(ylim = c(0, NA), clip = "off") +
+    labs(
+      title = "Day 27 - Animation: corridor clocks differ on the same UTC day",
+      subtitle = paste0(
+        "Bidirectional study-airport pairs in July 2025. Highlighted column = ",
+        sprintf("%02d:00", frame_hour),
+        ":00 UTC. Keeping the top ",
+        keep_top_n,
+        " airport-pair corridors per region by July traffic."
+      ),
+      x = "UTC hour",
+      y = NULL,
+      caption = "DECEA Performance Section and PRU EUROCONTROL; Brazil-Europe comparison study. Corridor = bidirectional study-airport pair. Heat shows average departures per July day."
+    ) +
+    theme_minimal(base_size = 11) +
+    theme(
+      plot.background = element_rect(fill = "#FFFDF8", color = NA),
+      panel.background = element_rect(fill = "#FFFDF8", color = NA),
+      panel.grid = element_blank(),
+      panel.spacing = unit(1.2, "lines"),
+      strip.text = element_text(face = "bold", size = 12),
+      plot.title = element_text(face = "bold", size = 18, color = "#1F1F1F"),
+      plot.subtitle = element_text(size = 11, color = "#3D3A34"),
+      plot.caption = element_text(size = 9, color = "#5B5953"),
+      axis.text.x = element_blank(),
+      axis.title.x = element_blank(),
+      axis.text.y = element_text(color = "#3D3A34", size = 9),
+      legend.position = "top",
+      plot.margin = margin(10, 16, 10, 16)
+    )
+
+  p_profile <- ggplot(
+    hour_profile,
+    aes(x = hour_utc, y = hour_share)
+  ) +
+    geom_step(color = "#8E8A83", linewidth = 1.1, alpha = 0.9) +
+    geom_point(color = "#8E8A83", size = 1.8, alpha = 0.9) +
+    geom_vline(
+      xintercept = frame_hour,
+      color = "#A45A00",
+      linewidth = 0.55,
+      alpha = 0.95
+    ) +
+    geom_point(
+      data = hour_profile |>
+        filter(hour_utc == frame_hour),
+      color = "#A45A00",
+      size = 2.6
+    ) +
+    geom_text(
+      data = frame_totals,
+      aes(
+        x = 0.1,
+        y = max(hour_profile$hour_share, na.rm = TRUE) * 0.92,
+        label = paste0(
+          sprintf("%02d:00", frame_hour),
+          " UTC: ",
+          comma(round(avg_daily_flights, 1)),
+          " avg flights"
+        )
+      ),
+      inherit.aes = FALSE,
+      hjust = 0,
+      vjust = 1,
+      size = 3.0,
+      color = "#3D3A34"
+    ) +
+    facet_wrap(~ region, ncol = 2) +
+    scale_x_continuous(
+      breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
+      labels = \(x) sprintf("%02d", x),
+      expand = expansion(mult = c(0.01, 0.01))
+    ) +
+    scale_y_continuous(
+      labels = percent_format(accuracy = 1),
+      expand = expansion(mult = c(0.05, 0.10))
+    ) +
+    labs(
+      x = "UTC hour",
+      y = "% of kept corridor flights"
+    ) +
+    theme_minimal(base_size = 10) +
+    theme(
+      panel.background = element_rect(fill = "#FFFDF8", color = NA),
+      plot.background = element_rect(fill = "#FFFDF8", color = NA),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_blank(),
+      strip.text = element_blank(),
+      axis.text = element_text(color = "#3D3A34"),
+      axis.title = element_text(color = "#3D3A34"),
+      plot.margin = margin(0, 16, 8, 16)
+    )
+
+  p_heat / p_profile + plot_layout(heights = c(8.5, 1.8))
+}
+
+frame_hours <- 0:23
+frame_paths <- file.path(frame_dir, sprintf("network-heartbeat-%02d.png", frame_hours))
+
+purrr::walk2(
+  frame_hours,
+  frame_paths,
+  \(frame_hour, frame_path) {
+    ggsave(
+      filename = frame_path,
+      plot = plot_network_hour(frame_hour),
+      width = 11,
+      height = 7.6,
+      dpi = 140
+    )
+  }
+)
+
+animation_path <- "figures/day27-animation-network-heartbeat.gif"
+
+network_animation <- image_read(frame_paths) |>
+  image_join() |>
+  image_animate(fps = 2)
+
+image_write(network_animation, animation_path)
+
+knitr::include_graphics(animation_path)
+```
+
+## Debrief
+
+The rough implementation already supports the intended story:
+
+* Brazil and Europe use the same UTC clock
+* each row is a bidirectional airport-pair corridor
+* the moving UTC cursor guides attention without forcing the geometry to carry the whole message
+
+For a next pass, the main options would be:
+
+* swap `UTC hour` for `arrival hour`
+* compare `average July day` against one specific `representative week`
+* add local-time annotations or a second synchronized hourly total panel
