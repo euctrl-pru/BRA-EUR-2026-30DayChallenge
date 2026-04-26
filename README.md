@@ -196,3 +196,17 @@ Conceptual building blocks
 * a message row linking per-flight uncertainty to the system-wide extra occupied ground-time on the busiest demand bands
 
 ![Day-25 space](figures/day25-space-uncertainty.png)
+
+### Day 26 - "trend"
+
+For Day 26 we used trend in the most direct operational sense: how did taxi-out predictability move from 2023 to 2025 across the 12 Brazilian and 12 European study airports? The final chart compares each airport's 2023 and 2025 average taxi-out uncertainty, defined as actual minus reference taxi-out minutes per departure. The regional contrast is striking: most Brazilian airports move toward lower uncertainty, while almost every European airport moves the other way.
+
+Conceptual building blocks
+
+* daily departure taxi-out aggregates for the 2023-2025 study airports
+* uncertainty defined as `actual taxi-out - reference taxi-out` per departure
+* airport-level averages for 2023 and 2025 connected with directional segments
+* opposite color semantics for improving versus worsening predictability
+* message tiles summarising how many airports trend up or down in each region
+
+![Day-26 trend](figures/day26-trend.png)

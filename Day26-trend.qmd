@@ -1,0 +1,593 @@
+---
+title: "Day 26 - Trend"
+format: html
+---
+
+## Aim
+
+Today's prompt is read very directly: show a meaningful operational trend in the 12-airport
+Brazil-Europe study set.
+
+The uncertainties rubric offers a useful hook, but it does not need to dominate the chart. We use
+it simply to define the metric:
+
+`uncertainty = actual taxi-out minutes - reference taxi-out minutes`
+
+That gives us a clear trend question:
+
+**From 2023 to 2025, did taxi-out predictability improve or deteriorate across the study
+airports?**
+
+This rough draft tests two chart types:
+
+1. a regional time trend with airport texture
+2. an airport-level trend comparison from 2023 to 2025
+
+## Setup
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(lubridate)
+library(scales)
+library(patchwork)
+```
+
+## Read Taxi-Out Data
+
+```{r}
+#| label: read-txxt
+
+read_txxt <- function(path, region) {
+  readr::read_csv(path, show_col_types = FALSE) |>
+    transmute(
+      ICAO,
+      PHASE,
+      DATE = as_date(DATE),
+      MVTS_VALID,
+      TOT_TXXT,
+      TOT_REF,
+      region = region
+    )
+}
+
+bra_files <- list.files("data", pattern = "PBWG-BRA-txxt-analytic-202[3-5]", full.names = TRUE)
+eur_files <- list.files("data", pattern = "PBWG-EUR-txxt-analytic-202[3-5]", full.names = TRUE)
+
+txxt_raw <- bind_rows(
+  map(bra_files, read_txxt, region = "Brazil"),
+  map(eur_files, read_txxt, region = "Europe")
+)
+```
+
+## Build Inputs
+
+```{r}
+#| label: build-inputs
+
+txxt_daily <- txxt_raw |>
+  filter(PHASE == "DEP", MVTS_VALID > 0) |>
+  mutate(
+    uncertainty_min = (TOT_TXXT - TOT_REF) / MVTS_VALID,
+    month = floor_date(DATE, "month")
+  ) |>
+  mutate(region = factor(region, levels = c("Brazil", "Europe")))
+
+monthly_airport <- txxt_daily |>
+  summarise(
+    uncertainty_min = median(uncertainty_min, na.rm = TRUE),
+    .by = c(region, ICAO, month)
+  ) |>
+  arrange(region, ICAO, month)
+
+monthly_region <- monthly_airport |>
+  summarise(
+    med_unc = median(uncertainty_min, na.rm = TRUE),
+    q25_unc = quantile(uncertainty_min, 0.25, na.rm = TRUE),
+    q75_unc = quantile(uncertainty_min, 0.75, na.rm = TRUE),
+    .by = c(region, month)
+  ) |>
+  arrange(region, month)
+
+airport_trend <- monthly_airport |>
+  mutate(year = year(month)) |>
+  filter(year %in% c(2023, 2025)) |>
+  summarise(
+    uncertainty_min = mean(uncertainty_min, na.rm = TRUE),
+    .by = c(region, ICAO, year)
+  ) |>
+  mutate(year_lab = factor(year, levels = c(2023, 2025))) |>
+  select(-year) |>
+  pivot_wider(names_from = year_lab, values_from = uncertainty_min) |>
+  rename(unc_2023 = `2023`, unc_2025 = `2025`) |>
+  mutate(
+    delta = unc_2025 - unc_2023
+  ) |>
+  group_by(region) |>
+  arrange(delta, .by_group = TRUE) |>
+  mutate(
+    airport_ord = factor(ICAO, levels = ICAO)
+  ) |>
+  ungroup()
+
+trend_summary <- airport_trend |>
+  summarise(
+    n_up = sum(delta > 0, na.rm = TRUE),
+    med_delta = median(delta, na.rm = TRUE),
+    .by = region
+  )
+```
+
+## Candidate 1: Time Trend With Airport Texture
+
+This version treats trend literally as a monthly path. The faint lines preserve airport-level
+texture while the darker regional line shows the median airport.
+
+```{r}
+#| label: candidate-1
+#| fig-width: 10
+#| fig-height: 5.5
+
+pal_region <- c("Brazil" = "#0F6E56", "Europe" = "#185FA5")
+
+p_time <- ggplot(monthly_airport, aes(x = month, y = uncertainty_min, group = ICAO)) +
+  geom_line(colour = "#A9AAA6", alpha = 0.22, linewidth = 0.45) +
+  geom_ribbon(
+    data = monthly_region,
+    aes(x = month, ymin = q25_unc, ymax = q75_unc, fill = region, group = region),
+    inherit.aes = FALSE,
+    alpha = 0.16,
+    colour = NA
+  ) +
+  geom_line(
+    data = monthly_region,
+    aes(x = month, y = med_unc, colour = region, group = region),
+    inherit.aes = FALSE,
+    linewidth = 1.2
+  ) +
+  facet_wrap(~ region, ncol = 2) +
+  scale_colour_manual(values = pal_region, guide = "none") +
+  scale_fill_manual(values = pal_region, guide = "none") +
+  scale_x_date(
+    date_breaks = "6 months",
+    date_labels = "%b\n%Y"
+  ) +
+  scale_y_continuous(
+    labels = \(x) paste0(round(x, 1), " min")
+  ) +
+  labs(
+    title = "Candidate 1: the regional trend is down in Brazil and up in Europe",
+    subtitle = "Monthly median uncertainty by airport; dark line shows the regional median and ribbon the airport IQR",
+    x = NULL,
+    y = "Unexpected taxi-out time per departure"
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14)
+  )
+
+p_time
+```
+
+## Candidate 2: Airport-Level Trend Scorecard
+
+This version makes trend more legible at airport level. Each segment shows the direction and
+magnitude of change between the 2023 and 2025 airport averages.
+
+```{r}
+#| label: candidate-2
+#| fig-width: 10
+#| fig-height: 6.5
+
+airport_long <- airport_trend |>
+  pivot_longer(
+    cols = c(unc_2023, unc_2025),
+    names_to = "year_lab",
+    values_to = "uncertainty_min"
+  ) |>
+  mutate(
+    year_lab = factor(
+      year_lab,
+      levels = c("unc_2023", "unc_2025"),
+      labels = c("2023 avg", "2025 avg")
+    )
+  )
+
+p_score <- ggplot(airport_long, aes(x = uncertainty_min, y = airport_ord, group = ICAO)) +
+  geom_segment(
+    data = airport_trend,
+    aes(x = unc_2023, xend = unc_2025, y = airport_ord, yend = airport_ord, colour = region),
+    linewidth = 1.1,
+    alpha = 0.75,
+    inherit.aes = FALSE
+  ) +
+  geom_point(
+    aes(shape = year_lab, fill = region, colour = region),
+    size = 3.1,
+    stroke = 0.9
+  ) +
+  geom_vline(xintercept = 0, linewidth = 0.4, linetype = "22", colour = "#A8A39A") +
+  facet_wrap(~ region, scales = "free_y", ncol = 2) +
+  scale_colour_manual(values = pal_region, guide = "none") +
+  scale_fill_manual(values = pal_region, guide = "none") +
+  scale_shape_manual(values = c(21, 24)) +
+  scale_x_continuous(
+    labels = \(x) paste0(round(x, 1), " min")
+  ) +
+  labs(
+    title = "Candidate 2: almost every European airport trends up, while most Brazilian airports trend down",
+    subtitle = "Average monthly taxi-out uncertainty in 2023 versus 2025",
+    x = "Unexpected taxi-out time per departure",
+    y = NULL,
+    shape = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    strip.text = element_text(face = "bold"),
+    axis.text = element_text(colour = "#45433E"),
+    plot.title = element_text(face = "bold", size = 14),
+    legend.position = "top"
+  )
+
+p_score
+```
+
+## Chosen Direction
+
+Candidate 2 is the more promising rough direction.
+
+Why it fits better:
+
+* the prompt is about `trend`, and the airport segments show trend directly
+* the contrast between regions is unusually clean
+* the uncertainty rubric stays present but does not need heavy explanation
+* the airport-level structure adds more value than another regional time series alone
+
+Current one-sentence takeaway:
+
+**From 2023 to 2025, taxi-out uncertainty trends upward at nearly every European study airport,
+while most Brazilian study airports trend downward.**
+
+## Publication Metrics
+
+```{r}
+#| label: publication-metrics
+
+summary_tiles <- airport_trend |>
+  summarise(
+    n_up = sum(delta > 0, na.rm = TRUE),
+    n_down = sum(delta < 0, na.rm = TRUE),
+    med_delta = median(delta, na.rm = TRUE),
+    mean_delta = mean(delta, na.rm = TRUE),
+    .by = region
+  ) |>
+  mutate(
+    count_up_label = paste0(n_up, " of 12"),
+    count_down_label = paste0(n_down, " of 12"),
+    delta_label = paste0(
+      if_else(mean_delta > 0, "+", ""),
+      number(mean_delta, accuracy = 0.1),
+      " min"
+    )
+  )
+
+top_changes <- airport_trend |>
+  group_by(region) |>
+  slice_max(abs(delta), n = 2, with_ties = FALSE) |>
+  ungroup() |>
+  mutate(
+    label = paste0(
+      ICAO, " ",
+      if_else(delta > 0, "+", ""),
+      number(delta, accuracy = 0.1),
+      " min"
+    ),
+    x_lab = unc_2025 + if_else(delta > 0, 0.18, -0.18),
+    hjust_lab = if_else(delta > 0, 0, 1)
+  )
+
+bra_count_label <- summary_tiles |>
+  filter(region == "Brazil") |>
+  pull(count_down_label)
+
+eur_count_label <- summary_tiles |>
+  filter(region == "Europe") |>
+  pull(count_up_label)
+
+bra_delta_label <- summary_tiles |>
+  filter(region == "Brazil") |>
+  pull(delta_label)
+
+eur_delta_label <- summary_tiles |>
+  filter(region == "Europe") |>
+  pull(delta_label)
+```
+
+## Final Plot
+
+```{r}
+#| label: final-plot
+#| fig-width: 10
+#| fig-height: 6.8
+
+airport_long_final <- airport_trend |>
+  pivot_longer(
+    cols = c(unc_2023, unc_2025),
+    names_to = "year_lab",
+    values_to = "uncertainty_min"
+  ) |>
+  mutate(
+    year_lab = factor(
+      year_lab,
+      levels = c("unc_2023", "unc_2025"),
+      labels = c("2023 avg", "2025 avg")
+    ),
+    direction = case_when(
+      delta > 0 ~ "Up",
+      delta < 0 ~ "Down",
+      TRUE ~ "Flat"
+    )
+  )
+
+dir_cols <- c(
+  Up = "#C24A3A",
+  Down = "#138A74",
+  Flat = "#6E6B64"
+)
+
+p_final_main <- ggplot(airport_long_final, aes(x = uncertainty_min, y = airport_ord, group = ICAO)) +
+  geom_segment(
+    data = airport_trend |>
+      mutate(
+        direction = case_when(
+          delta > 0 ~ "Up",
+          delta < 0 ~ "Down",
+          TRUE ~ "Flat"
+        )
+      ),
+    aes(
+      x = unc_2023,
+      xend = unc_2025,
+      y = airport_ord,
+      yend = airport_ord,
+      colour = direction
+    ),
+    linewidth = 1.4,
+    alpha = 0.85,
+    inherit.aes = FALSE,
+    arrow = grid::arrow(length = unit(0.12, "inches"), type = "closed")
+  ) +
+  geom_point(
+    aes(shape = year_lab),
+    size = 3.2,
+    stroke = 1,
+    colour = "#1F1F1C",
+    fill = "white"
+  ) +
+  geom_text(
+    data = top_changes,
+    aes(
+      x = x_lab,
+      y = airport_ord,
+      label = label
+    ),
+    hjust = top_changes$hjust_lab,
+    size = 3.2,
+    fontface = "bold",
+    colour = "#3D3B37",
+    inherit.aes = FALSE
+  ) +
+  facet_wrap(~ region, scales = "free_y", ncol = 2) +
+  scale_colour_manual(values = dir_cols, guide = "none") +
+  scale_shape_manual(values = c(21, 24)) +
+  scale_x_continuous(
+    labels = \(x) paste0(number(x, accuracy = 0.1), " min"),
+    limits = c(1.15, 5.5),
+    breaks = seq(1.5, 5.5, 0.5),
+    expand = expansion(mult = c(0.02, 0.08))
+  ) +
+  labs(
+    x = "Unexpected taxi-out time per departure",
+    y = NULL,
+    shape = NULL
+  ) +
+  theme_minimal(base_size = 11) +
+  theme(
+    panel.grid.minor = element_blank(),
+    panel.grid.major.y = element_line(colour = "#E2DED3", linewidth = 0.45),
+    panel.grid.major.x = element_line(colour = "#D7D2C6", linewidth = 0.45),
+    strip.text = element_text(face = "bold", size = 12),
+    axis.text = element_text(colour = "#45433E"),
+    legend.position = "top",
+    plot.margin = margin(0, 10, 0, 10)
+  )
+
+p_final_main
+```
+
+## Message Row
+
+```{r}
+#| label: message-row
+#| fig-width: 10
+#| fig-height: 2
+
+key_tile <- function(value, label, sublabel, accent_col) {
+  ggplot() +
+    annotate("rect", xmin = 0, xmax = 1, ymin = 0, ymax = 1, fill = "#F1EFE8", colour = NA) +
+    annotate(
+      "text", x = 0.07, y = 0.72, label = value,
+      size = 6.2, fontface = "bold", colour = accent_col, hjust = 0, vjust = 0.5
+    ) +
+    annotate(
+      "text", x = 0.07, y = 0.42, label = label,
+      size = 4.1, colour = "#444441", hjust = 0, vjust = 0.5
+    ) +
+    annotate(
+      "text", x = 0.07, y = 0.20, label = sublabel,
+      size = 3.5, colour = "#888780", hjust = 0, vjust = 0.5
+    ) +
+    coord_cartesian(xlim = c(0, 1), ylim = c(0, 1), clip = "off") +
+    theme_void() +
+    theme(
+      plot.margin = margin(0, 0, 0, 0),
+      plot.background = element_rect(fill = NA, colour = NA)
+    )
+}
+
+tile_bra <- key_tile(
+  bra_count_label,
+  "Brazil airports trend down",
+  paste0("mean shift ", bra_delta_label, " from 2023 to 2025"),
+  "#138A74"
+)
+
+tile_eur <- key_tile(
+  eur_count_label,
+  "Europe airports trend up",
+  paste0("mean shift ", eur_delta_label, " from 2023 to 2025"),
+  "#C24A3A"
+)
+
+tile_note <- key_tile(
+  "Arrow = trend",
+  "2023 circle to 2025 triangle",
+  "rightward means less predictable by 2025",
+  "#6E6B64"
+)
+
+p_tiles <- tile_bra + tile_eur + tile_note +
+  plot_layout(ncol = 3) &
+  theme(plot.margin = margin(0, 8, 0, 8))
+
+p_tiles
+```
+
+## Final Assembly
+
+```{r}
+#| label: final-assembly
+#| fig-width: 10
+#| fig-height: 8
+
+width <- 10
+height <- 8
+dpi <- 300
+outname_final <- "figures/day26-trend.png"
+
+our_title <- paste0(
+  "<span style='font-size:12pt;'><b>Chart-Challenge Day 26 - Trend</b></span><br>",
+  "<span style='font-size:18pt;'><b>Taxi-out uncertainty trends in opposite directions across the two study regions</b></span>"
+)
+
+our_subtitle <- paste0(
+  "Each airport is shown twice: its <b>2023 average</b> and its <b>2025 average</b> unexpected taxi-out time per departure, ",
+  "where unexpected means actual minus reference taxi-out minutes. ",
+  "<b>Most Brazilian airports moved left</b>, indicating more predictable taxi-out by 2025, while ",
+  "<b>almost every European airport moved right</b>, indicating the opposite trend."
+)
+
+our_caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Study set: 12 airports in Brazil and 12 airports in Europe. ",
+  "Metric: average monthly departure taxi-out uncertainty."
+)
+
+p_final <- p_tiles / p_final_main +
+  plot_layout(heights = c(1.15, 5.6)) +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = ggtext::element_textbox_simple(
+        size = 16,
+        lineheight = 1.2,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = ggtext::element_textbox_simple(
+        size = 11,
+        colour = "#2F2F2F",
+        lineheight = 1.15,
+        margin = margin(b = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.caption = ggtext::element_textbox_simple(
+        size = 9,
+        colour = "#4F4E49",
+        halign = 0,
+        lineheight = 1.1,
+        margin = margin(t = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.margin = margin(12, 12, 12, 12)
+    )
+  ) &
+  theme(plot.background = element_rect(fill = "white", colour = NA))
+
+p_final
+```
+
+## Save Rough Figure
+
+```{r}
+#| label: save-rough
+
+outname <- "figures/day26-trend-rough.png"
+
+ggsave(
+  filename = outname,
+  plot = p_score,
+  width = 10,
+  height = 6.5,
+  dpi = 300,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: show-rough
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname)
+```
+
+## Save And Check Final
+
+```{r}
+#| label: save-final
+
+ggsave(
+  filename = outname_final,
+  plot = p_final,
+  width = width,
+  height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```
+
+```{r}
+#| label: check-final
+#| echo: false
+#| out-width: "100%"
+
+knitr::include_graphics(outname_final)
+```

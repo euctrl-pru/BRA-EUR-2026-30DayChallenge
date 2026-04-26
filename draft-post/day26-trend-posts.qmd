@@ -1,0 +1,40 @@
+## Day 26 social post proposal
+
+### Option 1
+
+Day 26 of the #30DayChartChallenge: `Trend`
+
+We kept this one deliberately direct and used the prompt to ask a simple question:
+
+How did taxi-out predictability move from `2023` to `2025` across the 12 Brazilian and 12 European study airports?
+
+The metric is `uncertainty`:
+actual taxi-out minutes minus the reference taxi-out expectation.
+
+That makes the contrast surprisingly clean:
+
+* `10 of 12` Brazilian airports moved toward lower uncertainty
+* `11 of 12` European airports moved toward higher uncertainty
+
+So the trend is not just “up” or “down” overall. It splits by region.
+
+#Day26 #30DayChartChallenge #aviation #dataviz #rstats
+
+### Option 2
+
+For today’s `Trend` prompt we used a two-point airport scorecard rather than another time series.
+
+Each airport appears twice:
+
+* circle = `2023` average taxi-out uncertainty
+* triangle = `2025` average
+* arrow direction shows whether predictability improved or deteriorated
+
+The self-speaking part is the regional pattern:
+
+* most Brazilian airports moved left, toward lower uncertainty
+* almost every European airport moved right, toward higher uncertainty
+
+In other words, taxi-out uncertainty trended in opposite directions across the two study regions.
+
+#Day26 #30DayChartChallenge #aviation #datavisualization
