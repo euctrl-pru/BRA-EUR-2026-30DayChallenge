@@ -210,3 +210,17 @@ Conceptual building blocks
 * message tiles summarising how many airports trend up or down in each region
 
 ![Day-26 trend](figures/day26-trend.png)
+
+### Day 27 - "animation"
+
+For Day 27 we used animation to compare the daily clocks of the Brazilian and European study-airport networks. Rather than animating geography directly, the final chart tracks the busiest bidirectional airport-pair corridors in each region through the UTC day. The moving hour marker shows when each corridor lights up, while the lower profile summarizes what share of all kept corridor traffic falls into each hour. The result is a clean timing contrast: Europe peaks earlier on the UTC clock, while Brazil's strongest domestic corridors build later and remain elevated much deeper into the UTC day.
+
+Conceptual building blocks
+
+* `July 2025` departures only, restricted to study-airport to study-airport movements
+* bidirectional airport-pair corridors, ranked by July traffic within each region
+* corridor-hour heatmaps for the top corridor set in Brazil and Europe
+* animated UTC-hour outline to guide attention across the day
+* lower step-line profile showing each hour's share of all kept corridor flights
+
+![Day-27 animation](figures/day27-animation-network-heartbeat.gif)

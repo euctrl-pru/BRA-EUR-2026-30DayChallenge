@@ -28,6 +28,7 @@ library(arrow)
 library(magick)
 library(patchwork)
 library(scales)
+library(ggtext)
 
 source("./R/rqutils-zip.R")
 ```
@@ -153,7 +154,12 @@ corridor_totals_top <- corridor_hourly |>
   distinct(region, corridor, july_flights, corridor_rank) |>
   arrange(region, corridor_rank) |>
   mutate(
-    corridor_label = paste0(corridor, "  (", comma(july_flights), " Jul flts)")
+    corridor_label = paste0(
+      corridor,
+      "\n",
+      comma(july_flights),
+      " Jul flights"
+    )
   ) |>
   group_by(region) |>
   mutate(
@@ -221,14 +227,24 @@ dir.create(frame_dir, showWarnings = FALSE)
 
 plot_network_hour <- function(frame_hour) {
   frame_totals <- frame_summary |>
-    filter(hour_utc == frame_hour) |>
+    filter(hour_utc == frame_hour)
+
+  profile_label_pos <- frame_totals |>
+    left_join(
+      hour_profile |>
+        summarise(max_share = max(hour_share, na.rm = TRUE), .by = region),
+      by = "region"
+    ) |>
     mutate(
+      label_x = if_else(frame_hour <= 11, 23.2, 0.1),
+      label_hjust = if_else(frame_hour <= 11, 1, 0),
+      label_y = max_share * 1.12,
       summary_label = paste0(
-        "At ",
         sprintf("%02d:00", frame_hour),
-        " UTC: ",
-        comma(round(avg_daily_flights, 1)),
-        " avg daily flights across top corridors"
+        " UTC",
+        "\n",
+        percent(avg_daily_flights / sum(frame_summary$avg_daily_flights[frame_summary$region == region], na.rm = TRUE), accuracy = 0.1),
+        " of kept flights"
       )
     )
 
@@ -261,19 +277,19 @@ plot_network_hour <- function(frame_hour) {
       aes(x = hour_utc, y = corridor_key),
       fill = NA,
       color = "#2F241D",
-      linewidth = 0.5
+      linewidth = 0.45
     ) +
     geom_text(
       data = peak_labels,
       aes(
         x = hour_utc,
         y = 1.06,
-        label = paste0("Peak: ", sprintf("%02d:00", hour_utc), " UTC")
+      label = paste0("Peak ", sprintf("%02d:00", hour_utc), " UTC")
       ),
       inherit.aes = FALSE,
       hjust = 0.5,
       vjust = 0,
-      size = 3.0,
+      size = 3.1,
       color = "#3D3A34"
     ) +
     facet_wrap(~ region, ncol = 2, scales = "free_y") +
@@ -290,19 +306,7 @@ plot_network_hour <- function(frame_hour) {
       expand = expansion(mult = c(0.01, 0.01))
     ) +
     coord_cartesian(ylim = c(0, NA), clip = "off") +
-    labs(
-      title = "Day 27 - Animation: corridor clocks differ on the same UTC day",
-      subtitle = paste0(
-        "Bidirectional study-airport pairs in July 2025. Highlighted column = ",
-        sprintf("%02d:00", frame_hour),
-        ":00 UTC. Keeping the top ",
-        keep_top_n,
-        " airport-pair corridors per region by July traffic."
-      ),
-      x = "UTC hour",
-      y = NULL,
-      caption = "DECEA Performance Section and PRU EUROCONTROL; Brazil-Europe comparison study. Corridor = bidirectional study-airport pair. Heat shows average departures per July day."
-    ) +
+    labs(x = NULL, y = NULL) +
     theme_minimal(base_size = 11) +
     theme(
       plot.background = element_rect(fill = "#FFFDF8", color = NA),
@@ -310,14 +314,11 @@ plot_network_hour <- function(frame_hour) {
       panel.grid = element_blank(),
       panel.spacing = unit(1.2, "lines"),
       strip.text = element_text(face = "bold", size = 12),
-      plot.title = element_text(face = "bold", size = 18, color = "#1F1F1F"),
-      plot.subtitle = element_text(size = 11, color = "#3D3A34"),
-      plot.caption = element_text(size = 9, color = "#5B5953"),
       axis.text.x = element_blank(),
       axis.title.x = element_blank(),
-      axis.text.y = element_text(color = "#3D3A34", size = 9),
+      axis.text.y = element_text(color = "#3D3A34", size = 8.5, lineheight = 0.94),
       legend.position = "top",
-      plot.margin = margin(10, 16, 10, 16)
+      plot.margin = margin(0, 16, 6, 16)
     )
 
   p_profile <- ggplot(
@@ -332,6 +333,14 @@ plot_network_hour <- function(frame_hour) {
       linewidth = 0.55,
       alpha = 0.95
     ) +
+    geom_segment(
+      data = tibble(x = frame_hour - 0.48, xend = frame_hour + 0.48, y = 0, yend = 0),
+      aes(x = x, xend = xend, y = y, yend = yend),
+      inherit.aes = FALSE,
+      color = "#A45A00",
+      linewidth = 3.1,
+      lineend = "butt"
+    ) +
     geom_point(
       data = hour_profile |>
         filter(hour_utc == frame_hour),
@@ -339,19 +348,14 @@ plot_network_hour <- function(frame_hour) {
       size = 2.6
     ) +
     geom_text(
-      data = frame_totals,
+      data = profile_label_pos,
       aes(
-        x = 0.1,
-        y = max(hour_profile$hour_share, na.rm = TRUE) * 0.92,
-        label = paste0(
-          sprintf("%02d:00", frame_hour),
-          " UTC: ",
-          comma(round(avg_daily_flights, 1)),
-          " avg flights"
-        )
+        x = label_x,
+        y = label_y,
+        label = summary_label,
+        hjust = label_hjust
       ),
       inherit.aes = FALSE,
-      hjust = 0,
       vjust = 1,
       size = 3.0,
       color = "#3D3A34"
@@ -364,7 +368,7 @@ plot_network_hour <- function(frame_hour) {
     ) +
     scale_y_continuous(
       labels = percent_format(accuracy = 1),
-      expand = expansion(mult = c(0.05, 0.10))
+      expand = expansion(mult = c(0.05, 0.18))
     ) +
     labs(
       x = "UTC hour",
@@ -379,10 +383,32 @@ plot_network_hour <- function(frame_hour) {
       strip.text = element_blank(),
       axis.text = element_text(color = "#3D3A34"),
       axis.title = element_text(color = "#3D3A34"),
-      plot.margin = margin(0, 16, 8, 16)
+      plot.margin = margin(0, 16, 4, 16)
     )
 
-  p_heat / p_profile + plot_layout(heights = c(8.5, 1.8))
+  (p_heat / p_profile + plot_layout(heights = c(8.8, 1.7))) +
+    plot_annotation(
+      title = paste0(
+        "<span style='font-size:10.5pt; font-weight:600; color:#6A655D;'>Day 27 · Animation</span><br>",
+        "<span style='font-size:20pt; font-weight:700; color:#1F1F1F;'>Brazil and Europe do not wake up on the same UTC clock</span>"
+      ),
+      subtitle = paste0(
+        "Bidirectional study-airport pairs reveal two different network day-shapes: Europe peaks around early-to-mid UTC morning, while Brazil's strongest domestic pairs build later and stay elevated into the UTC evening.<br>",
+        "Highlighted column: <b>",
+        sprintf("%02d:00", frame_hour),
+        " UTC</b>. Keeping the top ",
+        keep_top_n,
+        " airport-pair corridors per region by July traffic."
+      ),
+      caption = "Source: DECEA Performance Section and PRU EUROCONTROL; Brazil-Europe comparison study. Heat shows average departures per July day in July 2025. Lower panel shows each hour's share of all kept bidirectional corridor flights."
+    ) &
+    theme(
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.title = ggtext::element_markdown(lineheight = 1.1, margin = margin(0, 0, 6, 0)),
+      plot.subtitle = ggtext::element_markdown(size = 11, color = "#3D3A34", lineheight = 1.15, margin = margin(0, 0, 8, 0)),
+      plot.caption = ggtext::element_markdown(size = 8.8, color = "#5B5953", margin = margin(8, 0, 0, 0))
+    )
 }
 
 frame_hours <- 0:23
