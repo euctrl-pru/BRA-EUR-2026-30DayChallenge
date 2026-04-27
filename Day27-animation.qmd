@@ -247,146 +247,154 @@ plot_network_hour <- function(frame_hour) {
         " of kept flights"
       )
     )
-
-  p_heat <- ggplot(
-    heatmap_base,
-    aes(x = hour_utc, y = corridor_key, fill = avg_daily_hour)
-  ) +
-    geom_tile(width = 0.92, height = 0.88, color = "#F7F4EC", linewidth = 0.15) +
-    geom_rect(
-      aes(
-        xmin = frame_hour - 0.5,
-        xmax = frame_hour + 0.5,
-        ymin = -Inf,
-        ymax = Inf
-      ),
-      inherit.aes = FALSE,
-      fill = NA,
-      color = "#A45A00",
-      linewidth = 0.7
-    ) +
-    geom_vline(
-      xintercept = frame_hour,
-      color = "#A45A00",
-      linewidth = 0.55,
-      alpha = 0.95
-    ) +
-    geom_tile(
-      data = heatmap_base |>
-        filter(hour_utc == frame_hour),
-      aes(x = hour_utc, y = corridor_key),
-      fill = NA,
-      color = "#2F241D",
-      linewidth = 0.45
-    ) +
-    geom_text(
-      data = peak_labels,
-      aes(
-        x = hour_utc,
-        y = 1.06,
-      label = paste0("Peak ", sprintf("%02d:00", hour_utc), " UTC")
-      ),
-      inherit.aes = FALSE,
-      hjust = 0.5,
-      vjust = 0,
-      size = 3.1,
-      color = "#3D3A34"
-    ) +
-    facet_wrap(~ region, ncol = 2, scales = "free_y") +
-    scale_fill_gradient(
-      low = "#F4EBD9",
-      high = "#A33A2B",
-      labels = label_number(accuracy = 0.1),
-      name = "Avg flights\nper July day"
-    ) +
-    scale_y_discrete(labels = \(x) stringr::str_remove(x, "^[^_]+___")) +
-    scale_x_continuous(
-      breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
-      labels = \(x) sprintf("%02d", x),
-      expand = expansion(mult = c(0.01, 0.01))
-    ) +
-    coord_cartesian(ylim = c(0, NA), clip = "off") +
-    labs(x = NULL, y = NULL) +
-    theme_minimal(base_size = 11) +
-    theme(
-      plot.background = element_rect(fill = "#FFFDF8", color = NA),
-      panel.background = element_rect(fill = "#FFFDF8", color = NA),
-      panel.grid = element_blank(),
-      panel.spacing = unit(1.2, "lines"),
-      strip.text = element_text(face = "bold", size = 12),
-      axis.text.x = element_blank(),
-      axis.title.x = element_blank(),
-      axis.text.y = element_text(color = "#3D3A34", size = 8.5, lineheight = 0.94),
-      legend.position = "top",
-      plot.margin = margin(0, 16, 6, 16)
-    )
-
-  p_profile <- ggplot(
-    hour_profile,
-    aes(x = hour_utc, y = hour_share)
-  ) +
-    geom_step(color = "#8E8A83", linewidth = 1.1, alpha = 0.9) +
-    geom_point(color = "#8E8A83", size = 1.8, alpha = 0.9) +
-    geom_vline(
-      xintercept = frame_hour,
-      color = "#A45A00",
-      linewidth = 0.55,
-      alpha = 0.95
-    ) +
-    geom_segment(
-      data = tibble(x = frame_hour - 0.48, xend = frame_hour + 0.48, y = 0, yend = 0),
-      aes(x = x, xend = xend, y = y, yend = yend),
-      inherit.aes = FALSE,
-      color = "#A45A00",
-      linewidth = 3.1,
-      lineend = "butt"
-    ) +
-    geom_point(
-      data = hour_profile |>
-        filter(hour_utc == frame_hour),
-      color = "#A45A00",
-      size = 2.6
-    ) +
-    geom_text(
-      data = profile_label_pos,
-      aes(
-        x = label_x,
-        y = label_y,
-        label = summary_label,
-        hjust = label_hjust
-      ),
-      inherit.aes = FALSE,
-      vjust = 1,
-      size = 3.0,
-      color = "#3D3A34"
-    ) +
-    facet_wrap(~ region, ncol = 2) +
-    scale_x_continuous(
-      breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
-      labels = \(x) sprintf("%02d", x),
-      expand = expansion(mult = c(0.01, 0.01))
-    ) +
-    scale_y_continuous(
-      labels = percent_format(accuracy = 1),
-      expand = expansion(mult = c(0.05, 0.18))
-    ) +
-    labs(
-      x = "UTC hour",
-      y = "% of kept corridor flights"
-    ) +
-    theme_minimal(base_size = 10) +
-    theme(
-      panel.background = element_rect(fill = "#FFFDF8", color = NA),
-      plot.background = element_rect(fill = "#FFFDF8", color = NA),
-      panel.grid.minor = element_blank(),
-      panel.grid.major.x = element_blank(),
-      strip.text = element_blank(),
-      axis.text = element_text(color = "#3D3A34"),
-      axis.title = element_text(color = "#3D3A34"),
-      plot.margin = margin(0, 16, 4, 16)
-    )
-
-  (p_heat / p_profile + plot_layout(heights = c(8.8, 1.7))) +
+  
+  build_heat <- function(region_name) {
+    region_heat <- heatmap_base |>
+      filter(region == region_name)
+    
+    region_peak <- peak_labels |>
+      filter(region == region_name)
+    
+    ggplot(region_heat, aes(x = hour_utc, y = corridor_key, fill = avg_daily_hour)) +
+      geom_tile(width = 0.92, height = 0.88, color = "#F7F4EC", linewidth = 0.15) +
+      geom_rect(
+        aes(
+          xmin = frame_hour - 0.5,
+          xmax = frame_hour + 0.5,
+          ymin = -Inf,
+          ymax = Inf
+        ),
+        inherit.aes = FALSE,
+        fill = NA,
+        color = "#A45A00",
+        linewidth = 0.7
+      ) +
+      geom_vline(
+        xintercept = frame_hour,
+        color = "#A45A00",
+        linewidth = 0.55,
+        alpha = 0.95
+      ) +
+      geom_tile(
+        data = region_heat |>
+          filter(hour_utc == frame_hour),
+        aes(x = hour_utc, y = corridor_key),
+        fill = NA,
+        color = "#2F241D",
+        linewidth = 0.45
+      ) +
+      geom_text(
+        data = region_peak,
+        aes(
+          x = hour_utc,
+          y = 1.06,
+          label = paste0("Peak ", sprintf("%02d:00", hour_utc), " UTC")
+        ),
+        inherit.aes = FALSE,
+        hjust = 0.5,
+        vjust = 0,
+        size = 3.1,
+        color = "#3D3A34"
+      ) +
+      scale_fill_gradient(
+        low = "#F4EBD9",
+        high = "#A33A2B",
+        labels = label_number(accuracy = 0.1),
+        name = "Avg flights\nper July day"
+      ) +
+      scale_y_discrete(labels = \(x) stringr::str_remove(x, "^[^_]+___")) +
+      scale_x_continuous(
+        breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
+        labels = \(x) sprintf("%02d", x),
+        expand = expansion(mult = c(0.01, 0.01))
+      ) +
+      coord_cartesian(ylim = c(0, NA), clip = "off") +
+      labs(title = region_name, x = NULL, y = NULL) +
+      theme_minimal(base_size = 11) +
+      theme(
+        plot.background = element_rect(fill = "#FFFDF8", color = NA),
+        panel.background = element_rect(fill = "#FFFDF8", color = NA),
+        panel.grid = element_blank(),
+        plot.title = element_text(face = "bold", size = 12, hjust = 0.5, margin = margin(0, 0, 6, 0)),
+        axis.text.x = element_blank(),
+        axis.title.x = element_blank(),
+        axis.text.y = element_text(color = "#3D3A34", size = 8.5, lineheight = 0.94),
+        legend.position = if (region_name == "Europe") "top" else "none",
+        plot.margin = margin(0, 0, 6, 0)
+      )
+  }
+  
+  build_profile <- function(region_name) {
+    region_profile <- hour_profile |>
+      filter(region == region_name)
+    
+    region_label <- profile_label_pos |>
+      filter(region == region_name)
+    
+    ggplot(region_profile, aes(x = hour_utc, y = hour_share)) +
+      geom_step(color = "#8E8A83", linewidth = 1.1, alpha = 0.9) +
+      geom_point(color = "#8E8A83", size = 1.8, alpha = 0.9) +
+      geom_vline(
+        xintercept = frame_hour,
+        color = "#A45A00",
+        linewidth = 0.55,
+        alpha = 0.95
+      ) +
+      geom_segment(
+        data = tibble(x = frame_hour - 0.48, xend = frame_hour + 0.48, y = 0, yend = 0),
+        aes(x = x, xend = xend, y = y, yend = yend),
+        inherit.aes = FALSE,
+        color = "#A45A00",
+        linewidth = 3.1,
+        lineend = "butt"
+      ) +
+      geom_point(
+        data = region_profile |>
+          filter(hour_utc == frame_hour),
+        color = "#A45A00",
+        size = 2.6
+      ) +
+      geom_text(
+        data = region_label,
+        aes(
+          x = label_x,
+          y = label_y,
+          label = summary_label,
+          hjust = label_hjust
+        ),
+        inherit.aes = FALSE,
+        vjust = 1,
+        size = 3.0,
+        color = "#3D3A34"
+      ) +
+      scale_x_continuous(
+        breaks = c(0, 3, 6, 9, 12, 15, 18, 21, 23),
+        labels = \(x) sprintf("%02d", x),
+        expand = expansion(mult = c(0.01, 0.01))
+      ) +
+      scale_y_continuous(
+        labels = percent_format(accuracy = 1),
+        expand = expansion(mult = c(0.05, 0.18))
+      ) +
+      labs(x = "UTC hour", y = NULL) +
+      theme_minimal(base_size = 10) +
+      theme(
+        panel.background = element_rect(fill = "#FFFDF8", color = NA),
+        plot.background = element_rect(fill = "#FFFDF8", color = NA),
+        panel.grid.minor = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_text(color = "#3D3A34"),
+        axis.text.y = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.title = element_text(color = "#3D3A34"),
+        plot.margin = margin(0, 0, 4, 0)
+      )
+  }
+  
+  p_bra <- build_heat("Brazil") / build_profile("Brazil") + plot_layout(heights = c(8.8, 1.7))
+  p_eur <- build_heat("Europe") / build_profile("Europe") + plot_layout(heights = c(8.8, 1.7))
+  
+  ((p_bra | p_eur) + plot_layout(widths = c(1, 1), guides = "collect")) +
     plot_annotation(
       title = paste0(
         "<span style='font-size:10.5pt; font-weight:600; color:#6A655D;'>Day 27 · Animation</span><br>",
@@ -405,8 +413,8 @@ plot_network_hour <- function(frame_hour) {
     theme(
       plot.title.position = "plot",
       plot.caption.position = "plot",
-      plot.title = ggtext::element_markdown(lineheight = 1.1, margin = margin(0, 0, 6, 0)),
-      plot.subtitle = ggtext::element_markdown(size = 11, color = "#3D3A34", lineheight = 1.15, margin = margin(0, 0, 8, 0)),
+      plot.title = ggtext::element_markdown(lineheight = 1.22, margin = margin(0, 0, 10, 0)),
+      plot.subtitle = ggtext::element_markdown(size = 11, color = "#3D3A34", lineheight = 1.15, margin = margin(0, 0, 10, 0)),
       plot.caption = ggtext::element_markdown(size = 8.8, color = "#5B5953", margin = margin(8, 0, 0, 0))
     )
 }
