@@ -1,0 +1,852 @@
+---
+title: "Day 28 - modelling"
+format: html
+---
+
+30 Day Chart Challenge — Day: "Modelling"
+
+idea: Additional Taxi-Out Time: The Model Beneath the KPI
+data expected: DATE, AIRPORT, ACTUAL_TXOT, REF_TXOT, ADD_TXOT
+                covering 2023, 2024, 2025
+                12 airports: 6 Brazilian (SB*), 6 European
+
+```{r}
+# -----------------------------------------------------------------------------
+# 0. Libraries & Fonts
+# -----------------------------------------------------------------------------
+library(tidyverse)
+library(ggdist)
+library(fitdistrplus)
+library(ggtext)
+library(patchwork)
+library(showtext)
+
+font_add_google("DM Sans", "dm_sans")
+font_add_google("DM Mono", "dm_mono")
+showtext_auto()
+showtext_opts(dpi = 300)
+
+# -----------------------------------------------------------------------------
+# 1. Load & prep REAL data
+# -----------------------------------------------------------------------------
+
+df <- fs::dir_ls("./data", regexp = "-txxt") |> 
+  purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |>
+  bind_rows() |> 
+  mutate(
+    #DATE = as.Date(DATE),
+    AIRPORT = ICAO,
+    ACTUAL_TXOT = TOT_TXXT / MVTS_VALID,
+    REF_TXOT    = TOT_REF  / MVTS_VALID,
+    ADD_TXOT    = TOT_ADD_TIME / MVTS_VALID
+  ) |>
+  filter(PHASE == "DEP") |>
+  mutate(
+    REGION = case_when(
+      grepl("^SB", AIRPORT) ~ "Brazil",
+      TRUE ~ "Europe"
+    )
+  )
+
+# -----------------------------------------------------------------------------
+# 2. Airport metadata 
+# -----------------------------------------------------------------------------
+
+airport_meta <- tibble(
+  AIRPORT = c(
+    "SBBR","SBCF","SBCT","SBEG","SBGL","SBGR",
+    "SBKP","SBPA","SBRF","SBRJ","SBSP","SBSV",
+    "EDDF","EDDM","EGKK","EGLL","EHAM","LEBL",
+    "LEMD","LFPG","LGAV","LPPT","LSZH","LTFM"
+  ),
+  REGION = c(
+    rep("Brazil", 12),
+    rep("Europe", 12)
+  ),
+  CITY = c(
+    "Brasília",
+    "Belo Horizonte (Confins)",
+    "Curitiba",
+    "Manaus",
+    "Rio de Janeiro (Galeão)",
+    "São Paulo (Guarulhos)",
+    "Campinas (Viracopos)",
+    "Porto Alegre",
+    "Recife",
+    "Rio de Janeiro (Santos Dumont)",
+    "São Paulo (Congonhas)",
+    "Salvador",
+    "Frankfurt",
+    "Munich",
+    "London (Gatwick)",
+    "London (Heathrow)",
+    "Amsterdam",
+    "Barcelona",
+    "Madrid",
+    "Paris (CDG)",
+    "Athens",
+    "Lisbon",
+    "Zurich",
+    "Istanbul"
+  )
+)
+
+df <- df |>
+  left_join(airport_meta, by = c("AIRPORT", "REGION"))
+
+# -----------------------------------------------------------------------------
+# 3. Gamma fitting on ADD_TXOT
+# -----------------------------------------------------------------------------
+fit_gamma <- function(x) {
+  x_pos <- x[x > 0.01]
+  if (length(x_pos) < 30) return(NULL)
+  tryCatch(
+    fitdist(x_pos, "gamma", method = "mle"),
+    error = function(e) NULL
+  )
+}
+
+gamma_fits <- df |>
+  group_by(AIRPORT, REGION, CITY) |>
+  summarise(
+    fit = list(fit_gamma(ADD_TXOT)),
+    x_min = quantile(ADD_TXOT[ADD_TXOT > 0], 0.01, na.rm = TRUE),
+    x_max = quantile(ADD_TXOT[ADD_TXOT > 0], 0.995, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  filter(!map_lgl(fit, is.null)) |>
+  mutate(
+    shape = map_dbl(fit, ~ .x$estimate["shape"]),
+    rate  = map_dbl(fit, ~ .x$estimate["rate"]),
+    mean_add = shape / rate
+  )
+
+gamma_curves <- gamma_fits |>
+  rowwise() |>
+  reframe(
+    AIRPORT = AIRPORT,
+    REGION  = REGION,
+    CITY    = CITY,
+    shape   = shape,
+    rate    = rate,
+    mean_add = mean_add,
+    x = seq(x_min, x_max, length.out = 300),
+    y = dgamma(x, shape = shape, rate = rate)
+  )
+
+# -----------------------------------------------------------------------------
+# 4. Palette & theme
+# -----------------------------------------------------------------------------
+pal_brazil <- "#C25B2A"
+pal_europe <- "#2A6696"
+pal_bg     <- "#F7F4EF"
+
+theme_anp <- function() {
+  theme_minimal(base_family = "dm_sans", base_size = 9) +
+    theme(
+      plot.background  = element_rect(fill = pal_bg, color = NA),
+      panel.background = element_rect(fill = pal_bg, color = NA),
+      panel.grid.major.x = element_line(color = "#DDD9D3", linewidth = 0.3),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor   = element_blank(),
+      axis.text.x = element_text(size = 7, color = "#6B6760", family = "dm_mono"),
+      axis.text.y = element_blank(),
+      axis.ticks  = element_blank(),
+      strip.text  = element_text(size = 8, face = "bold", hjust = 0),
+      strip.background = element_blank(),
+      plot.title = element_text(size = 16, face = "bold"),
+      plot.subtitle = element_markdown(size = 9),
+      plot.caption = element_text(size = 7, family = "dm_mono"),
+      legend.position = "none"
+    )
+}
+
+region_fill  <- c(Brazil = pal_brazil, Europe = pal_europe)
+region_color <- c(Brazil = pal_brazil, Europe = pal_europe)
+
+# -----------------------------------------------------------------------------
+# 5. Density data
+# -----------------------------------------------------------------------------
+dens_data <- df |>
+  dplyr::select(AIRPORT, REGION, CITY, ACTUAL_TXOT, REF_TXOT) |>
+  pivot_longer(
+    cols = c(ACTUAL_TXOT, REF_TXOT),
+    names_to = "metric",
+    values_to = "value"
+  ) |>
+  filter(value > 0) |>
+  group_by(metric) |>
+  filter(value < quantile(value, 0.995, na.rm = TRUE)) |>
+  ungroup()
+
+mean_labels <- gamma_fits |>
+  mutate(label = paste0("γ̄=", round(mean_add, 1)))
+
+# -----------------------------------------------------------------------------
+# 6. Plot
+# -----------------------------------------------------------------------------
+p_main <- ggplot() +
+
+  geom_density(
+    data = filter(dens_data, metric == "ACTUAL_TXOT"),
+    aes(x = value, fill = REGION, color = REGION),
+    alpha = 0.18, linewidth = 0.3
+  ) +
+
+  geom_density(
+    data = filter(dens_data, metric == "REF_TXOT"),
+    aes(x = value, color = REGION),
+    fill = NA, linewidth = 0.6, linetype = "22"
+  ) +
+
+  geom_line(
+    data = gamma_curves,
+    aes(x = x, y = y, color = REGION),
+    linewidth = 1.0
+  ) +
+
+  geom_vline(
+    data = gamma_fits,
+    aes(xintercept = mean_add, color = REGION),
+    linewidth = 0.4, linetype = "dotted"
+  ) +
+
+  geom_text(
+    data = mean_labels,
+    aes(x = mean_add, y = Inf, label = label, color = REGION),
+    hjust = 0, vjust = 1.5, size = 2.2, family = "dm_mono"
+  ) +
+
+  scale_fill_manual(values = region_fill) +
+  scale_color_manual(values = region_color) +
+
+  scale_x_continuous(
+    name = "Minutes",
+    limits = c(0, quantile(df$ACTUAL_TXOT, 0.99, na.rm = TRUE))
+  ) +
+
+  facet_wrap(~ AIRPORT) +
+
+  labs(
+    title = "The model beneath the KPI",
+    subtitle = "Taxi-out time distributions (DEP) with fitted gamma on additional time",
+    caption = "Source: DECEA / EUROCONTROL · 30 Day Chart Challenge",
+    x = "Minutes", y = NULL
+  ) +
+
+  theme_anp()
+
+# -----------------------------------------------------------------------------
+# 7. Export
+# -----------------------------------------------------------------------------
+ggsave(
+  "chart_challenge_day_modelling.png",
+  plot = p_main,
+  width = 14,
+  height = 7,
+  dpi = 300,
+  bg = pal_bg
+)
+
+message("✓ Saved: chart_challenge_day_modelling.png")
+
+```
+
+
+
+Trying to get this into a more challenge type of form
+
+
+```{r}
+# Ensure ordering: Brazil first, then Europe
+df <- df |>
+  mutate(
+    REGION = factor(REGION, levels = c("Brazil", "Europe"))
+  )
+
+gamma_curves <- gamma_curves |>
+  mutate(REGION = factor(REGION, levels = c("Brazil", "Europe")))
+
+gamma_fits <- gamma_fits |>
+  mutate(REGION = factor(REGION, levels = c("Brazil", "Europe")))
+
+```
+
+```{r}
+p_main <- ggplot() +
+
+  # Actual density
+  geom_density(
+    data = filter(dens_data, metric == "ACTUAL_TXOT"),
+    aes(x = value, fill = REGION, color = REGION),
+    alpha = 0.18, linewidth = 0.3
+  ) +
+
+  # Reference density
+  geom_density(
+    data = filter(dens_data, metric == "REF_TXOT"),
+    aes(x = value, color = REGION),
+    fill = NA, linewidth = 0.6, linetype = "22"
+  ) +
+
+  # Gamma model (ADD_TXOT)
+  geom_line(
+    data = gamma_curves,
+    aes(x = x, y = y, color = REGION),
+    linewidth = 1.0
+  ) +
+
+  # Mean line
+  geom_vline(
+    data = gamma_fits,
+    aes(xintercept = mean_add, color = REGION),
+    linewidth = 0.4, linetype = "dotted"
+  ) +
+
+  # Mean label
+  geom_text(
+    data = mean_labels,
+    aes(x = mean_add, y = Inf, label = label, color = REGION),
+    hjust = 0, vjust = 1.5, size = 2.2, family = "dm_mono"
+  ) +
+
+  scale_fill_manual(values = region_fill) +
+  scale_color_manual(values = region_color) +
+
+  scale_x_continuous(
+    name = "Minutes",
+    limits = c(0, quantile(df$ACTUAL_TXOT, 0.99, na.rm = TRUE))
+  ) +
+  
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+
+  # ✅ KEY CHANGE: facet by REGION (columns) + AIRPORT (rows)
+  facet_wrap(
+  ~ REGION + AIRPORT,
+  ncol = 2,
+  scales = "fixed"
+) +
+
+  labs(
+    title = "The model beneath the KPI",
+
+    subtitle = paste0(
+      "Each row shows one airport; <b>Brazil (left)</b> vs <b>Europe (right)</b>.<br>",
+      "Filled curves: <b>actual taxi-out</b> · dashed: <b>reference</b> · solid line: ",
+      "<b>gamma model of additional time</b>.<br>",
+      "<b>Key takeaway:</b> while average additional time is similar (~2–3 min), ",
+      "some airports show heavier tails — indicating less predictable surface operations."
+    ),
+
+    caption = "Source: DECEA / EUROCONTROL · 30 Day Chart Challenge",
+    x = "Minutes", y = NULL
+  ) +
+
+  theme_anp() +
+  theme(
+    strip.text.y.left = element_text(angle = 0, hjust = 0),
+    strip.placement = "outside"
+  ) +
+  theme(
+  axis.text.y = element_blank(),
+  axis.title.y = element_blank(),
+  panel.grid.major.y = element_blank()
+)
+
+```
+
+```{r}
+# -----------------------------------------------------------------------------
+# FINAL PLOT (fixed naming issue)
+# -----------------------------------------------------------------------------
+
+# Create combined facet variable (NOT called PANEL!)
+df <- df |>
+  mutate(FACET_ID = paste(REGION, AIRPORT, sep = " - "))
+
+gamma_curves <- gamma_curves |>
+  mutate(FACET_ID = paste(REGION, AIRPORT, sep = " - "))
+
+gamma_fits <- gamma_fits |>
+  mutate(FACET_ID = paste(REGION, AIRPORT, sep = " - "))
+
+mean_labels <- mean_labels |>
+  mutate(FACET_ID = paste(REGION, AIRPORT, sep = " - "))
+
+# Ensure ordering: Brazil first, then Europe
+facet_order <- df |>
+  distinct(REGION, AIRPORT, FACET_ID) |>
+  arrange(REGION, AIRPORT) |>
+  pull(FACET_ID)
+
+df$FACET_ID <- factor(df$FACET_ID, levels = facet_order)
+gamma_curves$FACET_ID <- factor(gamma_curves$FACET_ID, levels = facet_order)
+gamma_fits$FACET_ID <- factor(gamma_fits$FACET_ID, levels = facet_order)
+mean_labels$FACET_ID <- factor(mean_labels$FACET_ID, levels = facet_order)
+
+# Plot
+p_main <- ggplot() +
+
+  geom_density(
+    data = filter(dens_data, metric == "ACTUAL_TXOT"),
+    aes(x = value, fill = REGION, color = REGION),
+    alpha = 0.18, linewidth = 0.3
+  ) +
+
+  geom_density(
+    data = filter(dens_data, metric == "REF_TXOT"),
+    aes(x = value, color = REGION),
+    fill = NA, linewidth = 0.6, linetype = "22"
+  ) +
+
+  geom_line(
+    data = gamma_curves,
+    aes(x = x, y = y, color = REGION),
+    linewidth = 1.0
+  ) +
+
+  geom_vline(
+    data = gamma_fits,
+    aes(xintercept = mean_add, color = REGION),
+    linewidth = 0.4, linetype = "dotted"
+  ) +
+
+  geom_text(
+    data = mean_labels,
+    aes(x = mean_add, y = Inf, label = label, color = REGION),
+    hjust = 0, vjust = 1.5, size = 2.2, family = "dm_mono"
+  ) +
+
+  scale_fill_manual(values = region_fill) +
+  scale_color_manual(values = region_color) +
+
+  scale_x_continuous(
+    name = "Minutes",
+    limits = c(0, quantile(df$ACTUAL_TXOT, 0.99, na.rm = TRUE))
+  ) +
+
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+
+  facet_wrap(
+    ~ FACET_ID,
+    ncol = 2,
+    scales = "fixed"
+  ) +
+
+  labs(
+    title = "The model beneath the KPI",
+    subtitle = paste0(
+      "<b>Brazil (left)</b> vs <b>Europe (right)</b> across airports.<br>",
+      "Similar averages, but <b>heavier tails at some airports</b> reveal less predictable operations."
+    ),
+    caption = "Source: DECEA / EUROCONTROL · 30 Day Chart Challenge",
+    x = "Minutes", y = NULL
+  ) +
+
+  theme_anp() +
+  theme(
+    axis.text.y = element_blank(),
+    axis.title.y = element_blank(),
+    panel.grid.major.y = element_blank(),
+    strip.text = element_text(size = 7, face = "bold")
+  )
+
+
+p_main
+```
+
+
+
+# Export
+ggsave(
+  "chart_challenge_day_modelling.png",
+  plot = p_main,
+  width = 10,
+  height = 14,
+  dpi = 300,
+  bg = pal_bg
+)
+
+message("✓ Saved: chart_challenge_day_modelling.png")
+
+
+
+
+START ALL OVER AGAIN
+
+```{r}
+library(tidyverse)
+library(fitdistrplus)
+
+# -----------------------------------------------------------------------------
+# 1. Load & prepare
+# -----------------------------------------------------------------------------
+
+df <- fs::dir_ls("./data", regexp = "-txxt") |> 
+  purrr::map(.f = ~ readr::read_csv(.x, show_col_types = FALSE)) |>
+  bind_rows() |> 
+  mutate(
+    #DATE = as.Date(DATE),
+    AIRPORT = ICAO,
+    ACTUAL_TXOT = TOT_TXXT / MVTS_VALID,
+    REF_TXOT    = TOT_REF  / MVTS_VALID,
+    ADD_TXOT    = TOT_ADD_TIME / MVTS_VALID
+  ) |>
+  filter(PHASE == "DEP") |>
+  mutate(
+    REGION = case_when(
+      grepl("^SB", AIRPORT) ~ "Brazil",
+      TRUE ~ "Europe"
+    )
+  )
+
+# ✅ Check: we MUST have 24 combinations (12 airports × 2 regions total)
+df |>
+  distinct(AIRPORT, REGION) |>
+  arrange(REGION, AIRPORT) |>
+  print(n = 30)
+
+# -----------------------------------------------------------------------------
+# 2. Gamma fit (NO dropping airports)
+# -----------------------------------------------------------------------------
+fit_gamma <- function(x) {
+  x_pos <- x[x > 0.05]
+  x_pos <- x_pos[!is.na(x_pos)]   # ✅ remove NA explicitly
+  
+  if (length(x_pos) < 30) {
+    return(list(shape = NA_real_, rate = NA_real_))
+  }
+  
+  if (sd(x_pos, na.rm = TRUE) == 0) {
+    return(list(shape = NA_real_, rate = NA_real_))
+  }
+  
+  fit <- tryCatch(
+    suppressWarnings(fitdist(x_pos, "gamma", method = "mle")),
+    error = function(e) NULL
+  )
+  
+  if (is.null(fit)) {
+    return(list(shape = NA_real_, rate = NA_real_))
+  }
+  
+  list(
+    shape = unname(fit$estimate["shape"]),
+    rate  = unname(fit$estimate["rate"])
+  )
+}
+
+
+gamma_fits <- df |>
+  group_by(AIRPORT, REGION) |>
+  summarise(
+    fit = list(fit_gamma(ADD_TXOT)),
+    .groups = "drop"
+  ) |>
+  mutate(
+    shape = map_dbl(fit, "shape"),
+    rate  = map_dbl(fit, "rate"),
+    mean_add = shape / rate
+  )
+
+# ✅ Check: NO airports dropped
+gamma_fits |>
+  print(n = 30)
+
+```
+
+```{r}
+
+airport_order <- df |>
+  distinct(AIRPORT, REGION) |>
+  arrange(REGION, AIRPORT) |>
+  pull(AIRPORT)
+
+df <- df |>
+  mutate(AIRPORT = factor(AIRPORT, levels = airport_order))
+
+
+p <- ggplot(df, aes(x = ACTUAL_TXOT)) +
+  geom_density() +
+  facet_wrap(
+    ~ AIRPORT,
+    ncol = 6
+  )
+p
+```
+
+```{r}
+# -----------------------------------------------------------------------------
+# 1. Ordering: Brazil first, then Europe
+# -----------------------------------------------------------------------------
+airport_order <- df |>
+  distinct(AIRPORT, REGION) |>
+  arrange(REGION, AIRPORT) |>
+  pull(AIRPORT)
+
+df <- df |>
+  mutate(AIRPORT = factor(AIRPORT, levels = airport_order))
+
+gamma_curves <- gamma_fits |>
+  filter(!is.na(shape), !is.na(rate)) |>
+  rowwise() |>
+  reframe(
+    AIRPORT = AIRPORT,
+    REGION  = REGION,
+    x = seq(0, 10, length.out = 200),
+    y = dgamma(x, shape = shape, rate = rate)
+  ) |>
+  mutate(AIRPORT = factor(AIRPORT, levels = airport_order))
+
+# -----------------------------------------------------------------------------
+# 2. Colours (minimal but clear)
+# -----------------------------------------------------------------------------
+region_cols <- c(Brazil = "#C25B2A", Europe = "#2A6696")
+
+# -----------------------------------------------------------------------------
+# 3. Plot (clean small multiples, no empty panels)
+# -----------------------------------------------------------------------------
+p <- ggplot() +
+
+  # actual density
+  geom_density(
+    data = df,
+    aes(x = ACTUAL_TXOT, fill = REGION, color = REGION),
+    alpha = 0.2
+  ) +
+
+  # reference density
+  geom_density(
+    data = df,
+    aes(x = REF_TXOT, color = REGION),
+    linetype = "dashed",
+    linewidth = 0.6
+  ) +
+
+  # gamma overlay (ADD_TXOT)
+  geom_line(
+    data = gamma_curves,
+    aes(x = x, y = y, color = REGION),
+    linewidth = 0.9
+  ) +
+
+  scale_color_manual(values = region_cols) +
+  scale_fill_manual(values = region_cols) +
+
+  facet_wrap(
+    ~ AIRPORT,
+    ncol = 6
+  ) +
+
+  labs(
+    title = "Taxi-out performance distributions",
+    subtitle = "Brazil (left/top) vs Europe (right/bottom) · actual vs reference vs modelled additional time",
+    x = "Minutes",
+    y = NULL
+  )
+
+```
+
+
+
+```{r}
+library(patchwork)
+
+# -----------------------------------------------------------------------------
+# 1. Gamma curves (shared)
+# -----------------------------------------------------------------------------
+gamma_curves <- gamma_fits |>
+  filter(!is.na(shape), !is.na(rate)) |>
+  rowwise() |>
+  reframe(
+    AIRPORT = AIRPORT,
+    REGION  = REGION,
+    x = seq(0, 10, length.out = 200),
+    y = dgamma(x, shape = shape, rate = rate)
+  )
+
+# -----------------------------------------------------------------------------
+# 2. Colours
+# -----------------------------------------------------------------------------
+region_cols <- c(Brazil = "#C25B2A", Europe = "#2A6696")
+
+# -----------------------------------------------------------------------------
+# 3. Brazil plot
+# -----------------------------------------------------------------------------
+p_bra <- ggplot() +
+  geom_density(
+    data = df |> filter(REGION == "Brazil"),
+    aes(x = ACTUAL_TXOT, fill = REGION, color = REGION),
+    alpha = 0.2
+  ) +
+  geom_density(
+    data = df |> filter(REGION == "Brazil"),
+    aes(x = REF_TXOT, color = REGION),
+    linetype = "dashed"
+  ) +
+  geom_line(
+    data = gamma_curves |> filter(REGION == "Brazil"),
+    aes(x = x, y = y, color = REGION)
+  ) +
+  scale_color_manual(values = region_cols) +
+  scale_fill_manual(values = region_cols) +
+  facet_wrap(~ AIRPORT, ncol = 3) +
+  labs(title = "Brazil") +
+  theme(legend.position = "none")
+
+# -----------------------------------------------------------------------------
+# 4. Europe plot
+# -----------------------------------------------------------------------------
+p_eur <- ggplot() +
+  geom_density(
+    data = df |> filter(REGION == "Europe"),
+    aes(x = ACTUAL_TXOT, fill = REGION, color = REGION),
+    alpha = 0.2
+  ) +
+  geom_density(
+    data = df |> filter(REGION == "Europe"),
+    aes(x = REF_TXOT, color = REGION),
+    linetype = "dashed"
+  ) +
+  geom_line(
+    data = gamma_curves |> filter(REGION == "Europe"),
+    aes(x = x, y = y, color = REGION)
+  ) +
+  scale_color_manual(values = region_cols) +
+  scale_fill_manual(values = region_cols) +
+  facet_wrap(~ AIRPORT, ncol = 3) +
+  labs(title = "Europe") +
+  theme(legend.position = "none")
+
+
+
+p_bra <- p_bra +
+  geom_vline(
+  data = gamma_fits |> filter(REGION == "Brazil"),
+  aes(xintercept = mean_add),
+  linetype = "dotted",
+  linewidth = 0.4
+)
+
+p_eur <- p_eur +
+  geom_vline(
+  data = gamma_fits |> filter(REGION == "Europe"),
+  aes(xintercept = mean_add),
+  linetype = "dotted",
+  linewidth = 0.4
+)
+
+
+# -----------------------------------------------------------------------------
+# 5. Combine (THIS is the key)
+# -----------------------------------------------------------------------------
+p_main <- (p_bra + p_eur) +
+  plot_layout(widths = c(1, 1))
+
+p_main
+```
+
+```{r}
+title <- paste0(
+  "<span style='font-size:9pt;'><b>Chart-Challenge Day 28 - Modelling</b></span><br>",
+  "<span style='font-size:18pt;'><b>The hidden shape of taxi-out delay</b></span>"
+)
+
+subtitle <- paste0(
+      "Brazil (left) and Europe (right) show similar averages, ",
+      "but different distribution tails — revealing where predictability breaks down"
+    )
+
+caption <- paste0(
+  "DECEA Performance Section and EUROCONTROL PRU.",
+  "<br>Data file available in this on github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge."
+)
+
+
+p <- p_main + 
+  
+  scale_x_continuous(
+      limits = c(0, quantile(df$ACTUAL_TXOT, 0.99, na.rm = TRUE))
+  ) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+  
+  plot_annotation(
+    title    = title,
+    subtitle = subtitle,
+    caption  = caption
+  ) &
+  
+  theme_minimal(base_size = 9) &
+  theme(
+    legend.position = "none",
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor   = element_blank(),
+    axis.title.y       = element_blank(),
+    axis.title.x       = element_text(size = 12/.pt) ,
+    axis.text.y        = element_blank(),
+    axis.ticks         = element_blank(),
+    strip.text         = element_text(face = "bold", size = rel(1)),
+    plot.title = element_textbox(
+        size = 14,
+        lineheight = 1.2,
+        margin = margin(b = 5),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 11,
+        colour = "#2E2C28",
+        lineheight = 1,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA,
+         linetype = 1
+      ),
+    plot.caption = element_textbox_simple(
+        size = 8.8,
+        colour = "#4F4B45",
+        halign = 0,
+        lineheight = 1.08,
+        margin = margin(t = 12),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+    
+    panel.spacing      = unit(0.6, "lines"),
+    
+    plot.margin = margin(10, 10, 10, 10)
+  ) 
+```
+
+check visual parameters
+```{r}
+width <- 8
+height <- 7
+dpi <- 300
+
+p + ggview::canvas(width = width, height = height, dpi = dpi)
+```
+
+
+
+## Save And Check
+
+```{r}
+#| label: save-final
+
+outname <- "figures/day28-modelling-txxt.png"
+
+
+
+ggsave(
+  filename = outname,
+  plot = p,
+  # width = width,
+  # height = height,
+  dpi = dpi,
+  bg = "white"
+)
+```
