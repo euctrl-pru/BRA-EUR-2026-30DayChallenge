@@ -227,7 +227,7 @@ Conceptual building blocks
 
 ### Day 30 - "Global Health Data Exchange"
 
-For Day 30 we used the Global Health Data Exchange as a human-factors lens on the Brazil-Europe comparison study. The chart compares the busiest 2025 study-airport corridors in both directions, showing arrival density on the destination-local clock. The shaded band marks the Window of Circadian Low (WOCL), roughly 02:00-06:00, and the result is a fitting final note: in both directions, about three in ten arrivals fall inside that fatigue-relevant window.
+For Day 30 we used the Global Health Data Exchange as a human-factors lens on the Brazil-Europe comparison study. The chart compares the busiest 2025 study-airport corridors in both directions, showing arrival density on the destination-local clock. The shaded band marks the Window of Circadian Low (WOCL), roughly 02:00-06:00, and the result is a fitting final note: Brazil-to-Europe is closer to one in eight arrivals inside that fatigue-relevant window, while Europe-to-Brazil is near three in ten.
 
 Conceptual building blocks
 
@@ -235,6 +235,7 @@ Conceptual building blocks
 * bidirectional comparison of `Brazil -> Europe` and `Europe -> Brazil`
 * destination-local arrival time, including local time zones at each receiving airport
 * ridgeline densities for the busiest corridors in each direction
+* European APDF arrival records used to validate the Brazil-to-Europe arrival clock
 * GHDx / IHME Global Burden of Disease sleep-disorders data as the health-data frame for the human-factors story
 
 ![Day-30 Global Health Data Exchange](figures/day30-global-health-data-exchange.png)

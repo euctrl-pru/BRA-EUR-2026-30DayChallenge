@@ -85,6 +85,38 @@ local_hour <- function(time_utc, tzone) {
   )
 }
 
+source("R/rqutils-zip.R")
+
+eur_apdf_files <- paste0(eur_apts, "_01-JAN-2025_31-DEC-2025.parquet")
+
+eur_apdf_raw <- read_zip_content(
+  "/Users/rainerkoelle/RProjects/__DATA/APDF",
+  "apdf-2025.zip",
+  files = eur_apdf_files,
+  .type = "parquet"
+)
+
+if (!is.list(eur_apdf_raw)) {
+  eur_apdf_raw <- list(eur_apdf_raw)
+}
+
+eur_apdf_arrivals <- bind_rows(eur_apdf_raw) |>
+  filter(
+    SRC_PHASE == "ARR",
+    ADEP_ICAO %in% bra_apts,
+    ADES_ICAO %in% eur_apts,
+    !is.na(MVT_TIME_LT)
+  ) |>
+  transmute(
+    direction = "Brazil -> Europe",
+    sg_origem = ADEP_ICAO,
+    sg_destino = ADES_ICAO,
+    arr_time = MVT_TIME_LT,
+    arr_hour_local = hour(MVT_TIME_LT) +
+      minute(MVT_TIME_LT) / 60 +
+      second(MVT_TIME_LT) / 3600
+  )
+
 vra_raw <- readr::read_delim(
   "data-src/VRA_ano2025.csv",
   delim = ";",
@@ -92,21 +124,12 @@ vra_raw <- readr::read_delim(
   locale = locale(encoding = "UTF-8")
 )
 
-flight_arrivals <- vra_raw |>
+vra_arrivals_brazil <- vra_raw |>
   filter(
-    (sg_origem %in% bra_apts & sg_destino %in% eur_apts) |
-      (sg_origem %in% eur_apts & sg_destino %in% bra_apts)
+    sg_origem %in% eur_apts,
+    sg_destino %in% bra_apts
   ) |>
   mutate(
-    direction = if_else(
-      sg_origem %in% bra_apts,
-      "Brazil -> Europe",
-      "Europe -> Brazil"
-    ),
-    dep_utc = coalesce(
-      parse_vra_time(dt_partida_real),
-      parse_vra_time(dt_partida_prevista)
-    ),
     arr_utc = coalesce(
       parse_vra_time(dt_chegada_real),
       parse_vra_time(dt_chegada_prevista)
@@ -122,7 +145,21 @@ flight_arrivals <- vra_raw |>
   ) |>
   filter(!is.na(arr_utc), !is.na(dest_tz)) |>
   mutate(
+    direction = "Europe -> Brazil",
     arr_hour_local = local_hour(arr_utc, dest_tz),
+  ) |>
+  select(direction, sg_origem, sg_destino, arr_hour_local)
+
+flight_arrivals <- bind_rows(eur_apdf_arrivals, vra_arrivals_brazil) |>
+  left_join(
+    airport_meta |> select(origin = icao, origin_city = city),
+    by = c("sg_origem" = "origin")
+  ) |>
+  left_join(
+    airport_meta |> select(dest = icao, dest_city = city, dest_tz = tz),
+    by = c("sg_destino" = "dest")
+  ) |>
+  mutate(
     corridor = paste0(sg_origem, " -> ", sg_destino),
     corridor_city = paste0(origin_city, " -> ", dest_city)
   ) |>
@@ -311,14 +348,15 @@ our_subtitle <- paste0(
   "Long-haul Brazil-Europe traffic is not just a network story; it <b>lands on human clocks</b>. ",
   "The Global Health Data Exchange (GHDx) makes <b>sleep disorders</b> visible as a population health burden, ",
   "while data from the Brazil-Europe comparison study show when these corridors arrive at the destination. ",
-  "Both directions concentrate roughly <b>three in ten arrivals inside the Window of Circadian Low (WOCL)</b>, ",
-  "but the network shape differs: on the Brazilian side Sao Paulo GRU (SBGR) dominates the top Europe links, ",
+  "Using European arrival records, the asymmetry is clearer: Brazil-to-Europe is closer to <b>one in eight arrivals inside the Window of Circadian Low (WOCL)</b>, ",
+  "while Europe-to-Brazil is near <b>three in ten</b>. The network shape differs too: on the Brazilian side Sao Paulo GRU (SBGR) dominates the top Europe links, ",
   "while the European side is more distributed, with Lisbon (LPPT) especially prominent."
 )
 
 our_caption <- paste0(
-  "Operational data: Brazil-Europe comparison study, 2025 study-airport long-haul arrivals; actual arrival time used when available, scheduled arrival otherwise.",
-  "<br>Health-data frame: GHDx / IHME Global Burden of Disease Results Tool, where sleep disorders are available as prevalence/YLD/DALY estimates by country and year.",
+  "Operational data: European APDF arrival records and Brazil-Europe comparison study records, 2025 study-airport long-haul arrivals.",
+  "<br>Timing: actual arrival time used when available, scheduled arrival otherwise; all ridges use destination-local clock time.",
+  "<br>Health-data frame: GHDx / IHME Global Burden of Disease Results Tool, where sleep disorders are available by country and year.",
   "<br><span style='color:#827D73;'>github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge</span>"
 )
 
