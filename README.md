@@ -224,3 +224,17 @@ Conceptual building blocks
 * lower step-line profile showing each hour's share of all kept corridor flights
 
 ![Day-27 animation](figures/day27-animation-network-heartbeat.gif)
+
+### Day 30 - "Global Health Data Exchange"
+
+For Day 30 we used the Global Health Data Exchange as a human-factors lens on the Brazil-Europe comparison study. The chart compares the busiest 2025 study-airport corridors in both directions, showing arrival density on the destination-local clock. The shaded band marks the Window of Circadian Low (WOCL), roughly 02:00-06:00, and the result is a fitting final note: in both directions, about three in ten arrivals fall inside that fatigue-relevant window.
+
+Conceptual building blocks
+
+* 2025 long-haul arrivals between the Brazil and Europe study airports
+* bidirectional comparison of `Brazil -> Europe` and `Europe -> Brazil`
+* destination-local arrival time, including local time zones at each receiving airport
+* ridgeline densities for the busiest corridors in each direction
+* GHDx / IHME Global Burden of Disease sleep-disorders data as the health-data frame for the human-factors story
+
+![Day-30 Global Health Data Exchange](figures/day30-global-health-data-exchange.png)

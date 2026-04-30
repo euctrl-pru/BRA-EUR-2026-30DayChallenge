@@ -1,0 +1,514 @@
+---
+title: "Day 30 - Global Health Data Exchange"
+format: html
+---
+
+## Aim
+
+The last prompt is **Global Health Data Exchange**. We use it as a human-factors lens:
+GHDx/GBD makes sleep disorders a measurable public-health burden, and the Brazil-Europe
+operation tells us when long-haul arrival pressure reaches the destination clock.
+
+The chart deliberately keeps both directions. Brazil-to-Europe exposes the classic early
+European morning arrival wave. Europe-to-Brazil shows the reciprocal flow and makes the
+asymmetry visible.
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+library(tidyverse)
+library(lubridate)
+library(ggridges)
+library(ggtext)
+library(scales)
+library(patchwork)
+```
+
+## Build Inputs
+
+```{r}
+#| label: build-inputs
+
+bra_apts <- c(
+  "SBBR", "SBCF", "SBCT", "SBEG", "SBGL", "SBGR",
+  "SBKP", "SBPA", "SBRF", "SBRJ", "SBSP", "SBSV"
+)
+
+eur_apts <- c(
+  "EDDF", "EDDM", "EGKK", "EGLL", "EHAM", "LEBL",
+  "LEMD", "LFPG", "LGAV", "LPPT", "LSZH", "LTFM"
+)
+
+airport_meta <- tribble(
+  ~icao, ~city, ~tz,
+  "SBBR", "Brasilia", "America/Sao_Paulo",
+  "SBCF", "Belo Horizonte", "America/Sao_Paulo",
+  "SBCT", "Curitiba", "America/Sao_Paulo",
+  "SBEG", "Manaus", "America/Manaus",
+  "SBGL", "Rio Galeao", "America/Sao_Paulo",
+  "SBGR", "Sao Paulo GRU", "America/Sao_Paulo",
+  "SBKP", "Campinas", "America/Sao_Paulo",
+  "SBPA", "Porto Alegre", "America/Sao_Paulo",
+  "SBRF", "Recife", "America/Recife",
+  "SBRJ", "Rio Santos Dumont", "America/Sao_Paulo",
+  "SBSP", "Sao Paulo Congonhas", "America/Sao_Paulo",
+  "SBSV", "Salvador", "America/Bahia",
+  "EDDF", "Frankfurt", "Europe/Berlin",
+  "EDDM", "Munich", "Europe/Berlin",
+  "EGKK", "London Gatwick", "Europe/London",
+  "EGLL", "London Heathrow", "Europe/London",
+  "EHAM", "Amsterdam", "Europe/Amsterdam",
+  "LEBL", "Barcelona", "Europe/Madrid",
+  "LEMD", "Madrid", "Europe/Madrid",
+  "LFPG", "Paris CDG", "Europe/Paris",
+  "LGAV", "Athens", "Europe/Athens",
+  "LPPT", "Lisbon", "Europe/Lisbon",
+  "LSZH", "Zurich", "Europe/Zurich",
+  "LTFM", "Istanbul", "Europe/Istanbul"
+)
+
+parse_vra_time <- function(x) {
+  dmy_hm(x, tz = "UTC", quiet = TRUE)
+}
+
+local_hour <- function(time_utc, tzone) {
+  map2_dbl(
+    time_utc,
+    tzone,
+    \(time, zone) {
+      if (is.na(time) || is.na(zone)) return(NA_real_)
+      local <- with_tz(time, zone)
+      hour(local) + minute(local) / 60 + second(local) / 3600
+    }
+  )
+}
+
+vra_raw <- readr::read_delim(
+  "data-src/VRA_ano2025.csv",
+  delim = ";",
+  show_col_types = FALSE,
+  locale = locale(encoding = "UTF-8")
+)
+
+flight_arrivals <- vra_raw |>
+  filter(
+    (sg_origem %in% bra_apts & sg_destino %in% eur_apts) |
+      (sg_origem %in% eur_apts & sg_destino %in% bra_apts)
+  ) |>
+  mutate(
+    direction = if_else(
+      sg_origem %in% bra_apts,
+      "Brazil -> Europe",
+      "Europe -> Brazil"
+    ),
+    dep_utc = coalesce(
+      parse_vra_time(dt_partida_real),
+      parse_vra_time(dt_partida_prevista)
+    ),
+    arr_utc = coalesce(
+      parse_vra_time(dt_chegada_real),
+      parse_vra_time(dt_chegada_prevista)
+    )
+  ) |>
+  left_join(
+    airport_meta |> select(origin = icao, origin_city = city),
+    by = c("sg_origem" = "origin")
+  ) |>
+  left_join(
+    airport_meta |> select(dest = icao, dest_city = city, dest_tz = tz),
+    by = c("sg_destino" = "dest")
+  ) |>
+  filter(!is.na(arr_utc), !is.na(dest_tz)) |>
+  mutate(
+    arr_hour_local = local_hour(arr_utc, dest_tz),
+    corridor = paste0(sg_origem, " -> ", sg_destino),
+    corridor_city = paste0(origin_city, " -> ", dest_city)
+  ) |>
+  filter(!is.na(arr_hour_local))
+
+top_n <- 9
+
+top_corridors <- flight_arrivals |>
+  count(
+    direction,
+    corridor,
+    sg_origem,
+    sg_destino,
+    origin_city,
+    dest_city,
+    name = "flights"
+  ) |>
+  group_by(direction) |>
+  slice_max(flights, n = top_n, with_ties = FALSE) |>
+  arrange(direction, flights) |>
+  mutate(
+    corridor_label = paste0(
+      origin_city, " (", sg_origem, ")",
+      "\n",
+      dest_city, " (", sg_destino, ") · ", comma(flights)
+    ),
+    corridor_key = paste(direction, corridor_label, sep = "___")
+  ) |>
+  ungroup()
+
+ridge_data <- flight_arrivals |>
+  inner_join(
+    top_corridors |> select(direction, corridor, corridor_key, corridor_label, flights),
+    by = c("direction", "corridor")
+  ) |>
+  tidyr::crossing(hour_shift = c(-24, 0, 24)) |>
+  mutate(
+    arr_hour_plot = arr_hour_local + hour_shift,
+    direction = factor(direction, levels = c("Brazil -> Europe", "Europe -> Brazil")),
+    corridor_key = factor(corridor_key, levels = top_corridors$corridor_key)
+  )
+
+direction_summary <- flight_arrivals |>
+  mutate(
+    in_wocl = arr_hour_local >= 2 & arr_hour_local < 6
+  ) |>
+  summarise(
+    flights = n(),
+    wocl_share = mean(in_wocl),
+    peak_hour = floor(arr_hour_local[which.max(tabulate(floor(arr_hour_local) + 1, nbins = 24))]),
+    .by = direction
+  ) |>
+  mutate(
+    direction = factor(direction, levels = c("Brazil -> Europe", "Europe -> Brazil")),
+    label = paste0(
+      comma(flights), " flights · ",
+      percent(wocl_share, accuracy = 1),
+      " in WOCL"
+    )
+  )
+```
+
+## Basic Plot
+
+```{r}
+#| label: basic-chart
+#| fig-width: 13
+#| fig-height: 8
+
+pal_bg <- "#F6F3EC"
+pal_ink <- "#202124"
+pal_grid <- "#D8D2C5"
+pal_wocl <- "#C43B32"
+pal_peak <- "#0B6E69"
+pal_relief <- "#16865C"
+
+theme_day30 <- function() {
+  theme_minimal(base_size = 10) +
+    theme(
+      plot.background = element_rect(fill = pal_bg, colour = NA),
+      panel.background = element_rect(fill = pal_bg, colour = NA),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_line(colour = pal_grid, linewidth = 0.3),
+      axis.ticks = element_blank(),
+      axis.text.x = element_text(colour = "#5C5750", size = 8),
+      axis.text.y = element_text(colour = pal_ink, size = 8, hjust = 1),
+      strip.text = element_text(face = "bold", size = 11, colour = pal_ink, hjust = 0),
+      strip.background = element_blank(),
+      plot.title = element_markdown(face = "bold", size = 21, colour = pal_ink),
+      plot.subtitle = element_markdown(size = 10.5, colour = "#514D47", lineheight = 1.15),
+      plot.caption = element_text(size = 7.2, colour = "#6B665E", hjust = 0, lineheight = 1.1),
+      legend.position = "bottom",
+      legend.title = element_text(size = 8),
+      legend.text = element_text(size = 8),
+      panel.spacing.x = unit(2.5, "lines"),
+      plot.margin = margin(18, 22, 18, 22)
+    )
+}
+
+p_basic <- ggplot(
+  ridge_data,
+  aes(
+    x = arr_hour_plot,
+    y = corridor_key,
+    fill = after_stat(x),
+    height = after_stat(density)
+  )
+) +
+  annotate(
+    "rect",
+    xmin = 2, xmax = 6, ymin = -Inf, ymax = Inf,
+    fill = pal_wocl, alpha = 0.13
+  ) +
+  geom_density_ridges_gradient(
+    scale = 2.65,
+    rel_min_height = 0.006,
+    bandwidth = 0.48,
+    colour = "white",
+    linewidth = 0.28,
+    alpha = 0.96
+  ) +
+  geom_vline(xintercept = c(2, 6), colour = pal_wocl, linewidth = 0.35, linetype = "22") +
+  geom_label(
+    data = direction_summary,
+    aes(x = 23.7, y = Inf, label = label),
+    inherit.aes = FALSE,
+    hjust = 1,
+    vjust = 1.15,
+    label.size = 0,
+    fill = "#FFF8EA",
+    colour = pal_ink,
+    size = 3,
+    label.padding = unit(0.14, "lines")
+  ) +
+  facet_wrap(~ direction, ncol = 2, scales = "free_y") +
+  scale_x_continuous(
+    limits = c(0, 24),
+    breaks = seq(0, 24, by = 3),
+    labels = \(x) if_else(x == 24, "24", str_pad(x, 2, pad = "0"))
+  ) +
+  scale_y_discrete(labels = \(x) str_remove(x, "^[^_]+___")) +
+  scale_fill_gradientn(
+    colours = c("#17213A", "#305F8F", "#2E8C93", "#F0C64E", "#C76035", "#5C1B2A"),
+    limits = c(0, 24),
+    oob = squish,
+    breaks = c(0, 6, 12, 18, 24),
+    labels = c("00", "06", "12", "18", "24"),
+    name = "Destination local arrival hour"
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(
+    title = "The red-eye exchange",
+    subtitle = "Busiest 2025 Brazil-Europe study-airport corridors, by direction.<br>Arrival times are shown on the <b>destination-local clock</b>; the <span style='color:#C43B32'>02:00-06:00</span> band marks the Window of Circadian Low used in fatigue-risk work.",
+    x = "Destination local time of arrival",
+    y = NULL,
+    caption = paste(
+      "Operational data: ANAC VRA 2025, filtered to BRA-EUR study airports; actual arrival time used when available, scheduled arrival otherwise.",
+      "Health-data frame: GHDx / IHME Global Burden of Disease Results Tool, where sleep disorders are available as prevalence/YLD/DALY estimates by country and year.",
+      sep = "\n"
+    )
+  ) +
+  theme_day30()
+
+p_basic
+```
+
+## Beautify
+
+This keeps the basic ridgeline intact, then moves the explanatory text to the plot boundary,
+wraps it with `element_textbox_simple()`, and places the colour scale above the panels to leave
+more space for the two clocks.
+
+```{r}
+#| label: beautify-chart
+#| fig-width: 13
+#| fig-height: 8.4
+
+our_title <- paste0(
+  "<span style='font-size:10pt;color:#827D73;'>DAY 30 · GLOBAL HEALTH DATA EXCHANGE</span><br>",
+  "The <span style='color:#C43B32'><b>red-eye</b></span> exchange ",
+  "<span style='color:#C43B32;font-size:22pt;'>◉</span>"
+)
+
+our_subtitle <- paste0(
+  "Long-haul Brazil-Europe traffic is not just a network story; it <b>lands on human clocks</b>. ",
+  "The Global Health Data Exchange (GHDx) makes <b>sleep disorders</b> visible as a population health burden, ",
+  "while data from the Brazil-Europe comparison study show when these corridors arrive at the destination. ",
+  "Both directions concentrate roughly <b>three in ten arrivals inside the Window of Circadian Low (WOCL)</b>, ",
+  "but the network shape differs: on the Brazilian side Sao Paulo GRU (SBGR) dominates the top Europe links, ",
+  "while the European side is more distributed, with Lisbon (LPPT) especially prominent."
+)
+
+our_caption <- paste0(
+  "Operational data: Brazil-Europe comparison study, 2025 study-airport long-haul arrivals; actual arrival time used when available, scheduled arrival otherwise.",
+  "<br>Health-data frame: GHDx / IHME Global Burden of Disease Results Tool, where sleep disorders are available as prevalence/YLD/DALY estimates by country and year.",
+  "<br><span style='color:#827D73;'>github.com/euctrl-pru/BRA-EUR-2026-30DayChallenge</span>"
+)
+
+relief_annotation <- tibble(
+  direction = factor("Brazil -> Europe", levels = c("Brazil -> Europe", "Europe -> Brazil")),
+  x = 14.2,
+  xend = 15.7,
+  y = 1.35,
+  yend = 1.95,
+  label_x = 16.05,
+  label_y = 2.08,
+  label = "less red-eye\npressure"
+)
+
+theme_day30_final <- function() {
+  theme_minimal(base_size = 10) +
+    theme(
+      plot.background = element_rect(fill = pal_bg, colour = NA),
+      panel.background = element_rect(fill = pal_bg, colour = NA),
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      panel.grid.major.x = element_line(colour = pal_grid, linewidth = 0.32),
+      axis.ticks = element_blank(),
+      axis.text.x = element_text(colour = "#5C5750", size = 8),
+      axis.text.y = element_text(colour = pal_ink, size = 8.2, hjust = 1, lineheight = 0.94),
+      axis.title.x = element_text(size = 12, margin = margin(t = 8)),
+      strip.text = element_text(face = "bold", size = 12, colour = pal_ink, hjust = 0),
+      strip.background = element_blank(),
+      legend.position = "top",
+      legend.justification = "right",
+      legend.direction = "horizontal",
+      legend.title = element_text(size = 8.5, colour = "#4F4A43"),
+      legend.text = element_text(size = 8, colour = "#4F4A43"),
+      legend.background = element_rect(fill = pal_bg, colour = NA),
+      legend.margin = margin(0, 0, 6, 0),
+      panel.spacing.x = unit(2.4, "lines"),
+      plot.margin = margin(4, 8, 4, 8)
+    )
+}
+
+p_final_main <- ggplot(
+  ridge_data,
+  aes(
+    x = arr_hour_plot,
+    y = corridor_key,
+    fill = after_stat(x),
+    height = after_stat(density)
+  )
+) +
+  annotate(
+    "rect",
+    xmin = 2, xmax = 6, ymin = -Inf, ymax = Inf,
+    fill = pal_wocl, alpha = 0.13
+  ) +
+  geom_density_ridges_gradient(
+    scale = 2.5,
+    rel_min_height = 0.006,
+    bandwidth = 0.48,
+    colour = "white",
+    linewidth = 0.28,
+    alpha = 0.96
+  ) +
+  geom_vline(xintercept = c(2, 6), colour = pal_wocl, linewidth = 0.35, linetype = "22") +
+  geom_label(
+    data = direction_summary,
+    aes(x = 23.7, y = Inf, label = label),
+    inherit.aes = FALSE,
+    hjust = 1,
+    vjust = 1.18,
+    label.size = 0,
+    fill = "#FFF8EA",
+    colour = pal_ink,
+    size = 3,
+    label.padding = unit(0.14, "lines")
+  ) +
+  geom_curve(
+    data = relief_annotation,
+    aes(x = x, xend = xend, y = y, yend = yend),
+    inherit.aes = FALSE,
+    curvature = -0.35,
+    linewidth = 0.45,
+    colour = pal_relief,
+    arrow = arrow(length = unit(0.12, "inches"), type = "closed")
+  ) +
+  geom_text(
+    data = relief_annotation,
+    aes(x = label_x, y = label_y, label = label),
+    inherit.aes = FALSE,
+    hjust = 0,
+    lineheight = 0.9,
+    colour = pal_relief,
+    fontface = "bold",
+    size = 3.1
+  ) +
+  facet_wrap(~ direction, ncol = 2, scales = "free_y") +
+  scale_x_continuous(
+    limits = c(0, 24),
+    breaks = seq(0, 24, by = 3),
+    labels = \(x) if_else(x == 24, "24", str_pad(x, 2, pad = "0"))
+  ) +
+  scale_y_discrete(labels = \(x) str_remove(x, "^[^_]+___")) +
+  scale_fill_gradientn(
+    colours = c("#17213A", "#305F8F", "#2E8C93", "#F0C64E", "#C76035", "#5C1B2A"),
+    limits = c(0, 24),
+    oob = squish,
+    breaks = c(0, 6, 12, 18, 24),
+    labels = c("00", "06", "12", "18", "24"),
+    name = "Destination local arrival hour",
+    guide = guide_colourbar(
+      title.position = "left",
+      title.vjust = 0.8,
+      barwidth = unit(3.6, "cm"),
+      barheight = unit(0.28, "cm"),
+      ticks.colour = "white"
+    )
+  ) +
+  coord_cartesian(clip = "off") +
+  labs(
+    x = "Destination local time of arrival",
+    y = NULL
+  ) +
+  theme_day30_final()
+
+p_final <- p_final_main +
+  plot_annotation(
+    title = our_title,
+    subtitle = our_subtitle,
+    caption = our_caption,
+    theme = theme(
+      plot.title = element_textbox_simple(
+        size = 21,
+        lineheight = 1.08,
+        margin = margin(b = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.subtitle = element_textbox_simple(
+        size = 10.5,
+        colour = "#514D47",
+        lineheight = 1.13,
+        margin = margin(b = 8),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.caption = element_textbox_simple(
+        size = 7.5,
+        colour = "#6B665E",
+        halign = 0,
+        lineheight = 1.08,
+        margin = margin(t = 10),
+        padding = margin(0, 0, 0, 0),
+        fill = NA,
+        box.color = NA
+      ),
+      plot.title.position = "plot",
+      plot.caption.position = "plot",
+      plot.margin = margin(14, 16, 12, 16)
+    )
+  ) &
+  theme(plot.background = element_rect(fill = pal_bg, colour = NA))
+
+p_final
+```
+
+## Save Figures
+
+```{r}
+#| label: save-figures
+#| eval: true
+#| echo: false
+#| message: false
+#| warning: false
+
+ggsave(
+  "figures/day30-global-health-data-exchange-rough.png",
+  plot = p_basic,
+  width = 13,
+  height = 8,
+  dpi = 320,
+  bg = pal_bg
+)
+
+ggsave(
+  "figures/day30-global-health-data-exchange.png",
+  plot = p_final,
+  width = 13,
+  height = 8.4,
+  dpi = 320,
+  bg = pal_bg
+)
+```

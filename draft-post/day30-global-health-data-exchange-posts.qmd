@@ -1,0 +1,41 @@
+## Day 30 social post proposal
+
+### LinkedIn draft
+
+Day 30 of the #30DayChartChallenge: `Global Health Data Exchange`
+
+And that is a wrap.
+
+For the final prompt we used the Global Health Data Exchange as a human-factors lens on the Brazil-Europe comparison study.
+
+Long-haul traffic is not just a network story. It lands on human clocks.
+
+The chart compares the busiest 2025 study-airport corridors in both directions:
+
+* `Brazil -> Europe`
+* `Europe -> Brazil`
+
+Each ridge shows the destination-local arrival clock. The shaded band marks the Window of Circadian Low (WOCL), roughly `02:00-06:00`, a period often used in fatigue-risk work.
+
+The striking part: in both directions, about three in ten arrivals fall inside that WOCL band.
+
+But the network shape differs. On the Brazilian side, Sao Paulo GRU (`SBGR`) dominates the top Europe links. On the European side, the pattern is more distributed, with Lisbon (`LPPT`) especially prominent.
+
+So the final chart closes the challenge where aviation performance always comes back to: people, time, and the operational system around them.
+
+#Day30 #30DayChartChallenge #aviation #dataviz #rstats #HumanFactors #ATM
+
+### Bluesky draft
+
+Day 30 of #30DayChartChallenge: Global Health Data Exchange.
+
+Final chart, final prompt.
+
+We used GHDx as a human-factors lens on Brazil-Europe long-haul traffic: these flows do not just connect airports, they land on human clocks.
+
+About three in ten arrivals in both directions fall inside the Window of Circadian Low (WOCL), 02:00-06:00 destination-local time.
+
+Brazil -> Europe is heavily shaped by Sao Paulo GRU.
+Europe -> Brazil is more distributed, with Lisbon especially prominent.
+
+#Day30 #dataviz #rstats #aviation
