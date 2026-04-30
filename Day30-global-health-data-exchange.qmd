@@ -346,11 +346,10 @@ our_title <- paste0(
 
 our_subtitle <- paste0(
   "Long-haul Brazil-Europe traffic is not just a network story; it <b>lands on human clocks</b>. ",
-  "The Global Health Data Exchange (GHDx) makes <b>sleep disorders</b> visible as a population health burden, ",
-  "while data from the Brazil-Europe comparison study show when these corridors arrive at the destination. ",
-  "Using European arrival records, the asymmetry is clearer: Brazil-to-Europe is closer to <b>one in eight arrivals inside the Window of Circadian Low (WOCL)</b>, ",
-  "while Europe-to-Brazil is near <b>three in ten</b>. The network shape differs too: on the Brazilian side Sao Paulo GRU (SBGR) dominates the top Europe links, ",
-  "while the European side is more distributed, with Lisbon (LPPT) especially prominent."
+  "The eye-catcher is the asymmetry: Brazil-to-Europe is closer to one in eight arrivals inside the ",
+  "<b>Window of Circadian Low (WOCL)</b>, while Europe-to-Brazil is near <b>three in ten</b>. ",
+  "Night flying restrictions are more prevalent at European hubs than in Brazil, so much of the red-eye pressure reappears on the early-morning Brazilian arrival clock. ",
+  "The Global Health Data Exchange (GHDx) keeps the health context visible by making <b>sleep disorders</b> measurable as a population burden."
 )
 
 our_caption <- paste0(
@@ -382,12 +381,14 @@ theme_day30_final <- function() {
       strip.text = element_text(face = "bold", size = 12, colour = pal_ink, hjust = 0),
       strip.background = element_blank(),
       legend.position = "top",
+      legend.location = "plot",
       legend.justification = "right",
+      legend.box.just = "right",
       legend.direction = "horizontal",
       legend.title = element_text(size = 8.5, colour = "#4F4A43"),
       legend.text = element_text(size = 8, colour = "#4F4A43"),
       legend.background = element_rect(fill = pal_bg, colour = NA),
-      legend.margin = margin(0, 0, 6, 0),
+      legend.margin = margin(-10, 0, 2, 0),
       panel.spacing.x = unit(2.4, "lines"),
       plot.margin = margin(4, 8, 4, 8)
     )
@@ -421,7 +422,7 @@ p_final_main <- ggplot(
     aes(x = 23.7, y = Inf, label = label),
     inherit.aes = FALSE,
     hjust = 1,
-    vjust = 1.18,
+    vjust = -0.12,
     label.size = 0,
     fill = "#FFF8EA",
     colour = pal_ink,
@@ -444,7 +445,10 @@ p_final_main <- ggplot(
     breaks = seq(0, 24, by = 3),
     labels = \(x) if_else(x == 24, "24", str_pad(x, 2, pad = "0"))
   ) +
-  scale_y_discrete(labels = \(x) str_remove(x, "^[^_]+___")) +
+  scale_y_discrete(
+    labels = \(x) str_remove(x, "^[^_]+___"),
+    expand = expansion(add = c(0.15, 1.05))
+  ) +
   scale_fill_gradientn(
     colours = c("#17213A", "#305F8F", "#2E8C93", "#F0C64E", "#C76035", "#5C1B2A"),
     limits = c(0, 24),
