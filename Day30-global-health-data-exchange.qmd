@@ -324,12 +324,8 @@ our_caption <- paste0(
 
 relief_annotation <- tibble(
   direction = factor("Brazil -> Europe", levels = c("Brazil -> Europe", "Europe -> Brazil")),
-  x = 14.2,
-  xend = 15.7,
-  y = 1.35,
-  yend = 1.95,
-  label_x = 16.05,
-  label_y = 2.08,
+  label_x = 13.55,
+  label_y = 2.55,
   label = "less red-eye\npressure"
 )
 
@@ -393,15 +389,6 @@ p_final_main <- ggplot(
     colour = pal_ink,
     size = 3,
     label.padding = unit(0.14, "lines")
-  ) +
-  geom_curve(
-    data = relief_annotation,
-    aes(x = x, xend = xend, y = y, yend = yend),
-    inherit.aes = FALSE,
-    curvature = -0.35,
-    linewidth = 0.45,
-    colour = pal_relief,
-    arrow = arrow(length = unit(0.12, "inches"), type = "closed")
   ) +
   geom_text(
     data = relief_annotation,
