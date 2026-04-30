@@ -295,7 +295,15 @@ p_basic <- ggplot(
     size = 3,
     label.padding = unit(0.14, "lines")
   ) +
-  facet_wrap(~ direction, ncol = 2, scales = "free_y") +
+facet_wrap(
+  ~ direction,
+  ncol = 2,
+  scales = "free_y",
+  labeller = as_labeller(c(
+    "Brazil -> Europe" = "Brazil to Europe",
+    "Europe -> Brazil" = "Europe to Brazil"
+  ))
+) +
   scale_x_continuous(
     limits = c(0, 24),
     breaks = seq(0, 24, by = 3),
@@ -439,7 +447,15 @@ p_final_main <- ggplot(
     fontface = "bold",
     size = 3.1
   ) +
-  facet_wrap(~ direction, ncol = 2, scales = "free_y") +
+facet_wrap(
+  ~ direction,
+  ncol = 2,
+  scales = "free_y",
+  labeller = as_labeller(c(
+    "Brazil -> Europe" = "Brazil to Europe",
+    "Europe -> Brazil" = "Europe to Brazil"
+  ))
+) +
   scale_x_continuous(
     limits = c(0, 24),
     breaks = seq(0, 24, by = 3),
